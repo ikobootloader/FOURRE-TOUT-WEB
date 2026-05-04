@@ -349,8 +349,8 @@
 
 /**
  * TASKMDA RECURRENCE UI HANDLER
- * GÃ¨re l'interface utilisateur pour la configuration de la rÃ©currence
- * IntÃ©gration dans taskmda-team.js pour les Ã©vÃ©nements et validations
+ * Gère l'interface utilisateur pour la configuration de la récurrence
+ * Intégration dans taskmda-team.js pour les événements et validations
  */
 
 (function initRecurrenceUIHandler() {
@@ -361,7 +361,7 @@
   };
 
   /**
-   * Initialise les comportements de l'UI de la rÃ©currence
+   * Initialise les comportements de l'UI de la récurrence
    */
   function initRecurrenceUI() {
     const enableCheckbox = document.getElementById('task-recurrence-enabled');
@@ -373,24 +373,24 @@
 
     if (!enableCheckbox || !configDiv) return;
 
-    // Toggle du formulaire de rÃ©currence
+    // Toggle du formulaire de récurrence
     enableCheckbox.addEventListener('change', () => {
       configDiv.classList.toggle('hidden', !enableCheckbox.checked);
       
-      // Masquer/afficher l'Ã‰chÃ©ance selon la rÃ©currence
+      // Masquer/afficher l'échéance selon la récurrence
       if (dueDateWrap) {
         dueDateWrap.classList.toggle('hidden', enableCheckbox.checked);
       }
       
-      // Modifier le label de la date de dÃ©part
+      // Modifier le label de la date de départ
       if (startDateLabel) {
         startDateLabel.textContent = enableCheckbox.checked 
-          ? 'Date de premiÃ¨re occurrence' 
-          : 'Date de dÃ©part';
+          ? 'Date de première occurrence' 
+          : 'Date de départ';
       }
       
       if (enableCheckbox.checked) {
-        // Copier l'Ã‰chÃ©ance vers la date de dÃ©part si elle existe
+        // Copier l'échéance vers la date de départ si elle existe
         const dueDate = document.getElementById('task-due-date');
         const startDate = document.getElementById('task-recurrence-start-date');
         if (dueDate?.value && startDate && !startDate.value) {
@@ -399,7 +399,7 @@
         initializeRecurrenceDefaults();
         updateRecurrenceSummary();
       } else {
-        // Copier la date de dÃ©part vers l'Ã‰chÃ©ance si elle existe
+        // Copier la date de départ vers l'échéance si elle existe
         const dueDate = document.getElementById('task-due-date');
         const startDate = document.getElementById('task-recurrence-start-date');
         if (startDate?.value && dueDate && !dueDate.value) {
@@ -408,7 +408,7 @@
       }
     });
 
-    // Changement du type de rÃ©currence
+    // Changement du type de récurrence
     if (typeSelect) {
       typeSelect.addEventListener('change', () => {
         updateRecurrenceTypeUI();
@@ -439,7 +439,7 @@
   }
 
   /**
-   * Met Ã  jour la visibilitÃ© des champs selon le type de rÃ©currence
+   * Met à jour la visibilité des champs selon le type de récurrence
    */
   function updateRecurrenceTypeUI() {
     const typeSelect = document.getElementById('task-recurrence-type');
@@ -457,7 +457,7 @@
   }
 
   /**
-   * Met Ã  jour la visibilitÃ© des champs selon le type de fin
+   * Met à jour la visibilité des champs selon le type de fin
    */
   function updateRecurrenceEndTypeUI() {
     const endTypeSelect = document.getElementById('task-recurrence-end-type');
@@ -473,14 +473,14 @@
   }
 
   /**
-   * Initialise les valeurs par dÃ©faut pour la rÃ©currence
+   * Initialise les valeurs par défaut pour la récurrence
    */
   function initializeRecurrenceDefaults() {
     const startDateInput = document.getElementById('task-recurrence-start-date');
     const dueDateInput = document.getElementById('task-due-date');
 
     if (startDateInput && !startDateInput.value) {
-      // Si une date d'Ã©chÃ©ance est dÃ©finie, l'utiliser comme date de dÃ©part
+      // Si une date d'échéance est définie, l'utiliser comme date de départ
       if (dueDateInput && dueDateInput.value) {
         startDateInput.value = dueDateInput.value;
       } else {
@@ -493,7 +493,7 @@
 
     const endDateInput = document.getElementById('task-recurrence-end-date');
     if (endDateInput && !endDateInput.value) {
-      // DÃ©finir une date de fin par dÃ©faut un an Ã  partir de maintenant
+      // Définir une date de fin par défaut un an à partir de maintenant
       const nextYear = new Date();
       nextYear.setFullYear(nextYear.getFullYear() + 1);
       endDateInput.value = nextYear.toISOString().split('T')[0];
@@ -501,7 +501,7 @@
   }
 
   /**
-   * GÃ©nÃ¨re un rÃ©sumÃ© lisible de la configuration de rÃ©currence
+   * Génère un résumé lisible de la configuration de récurrence
    */
   function updateRecurrenceSummary() {
     const summaryDiv = document.getElementById('task-recurrence-summary');
@@ -510,27 +510,27 @@
     try {
       const config = extractRecurrenceConfig();
       if (!config || !config.enabled) {
-        summaryDiv.textContent = 'RÃ©currence dÃ©sactivÃ©e';
+        summaryDiv.textContent = 'Récurrence désactivée';
         summaryDiv.className = 'px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900';
         return;
       }
 
       const label = window.TaskMDARecurrence?.formatRecurrenceLabel?.(config);
       if (label) {
-        summaryDiv.textContent = `âœ“ ${label}`;
+        summaryDiv.textContent = `\u2713 ${label}`;
         summaryDiv.className = 'px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-900';
       } else {
         summaryDiv.textContent = 'Configuration en cours...';
         summaryDiv.className = 'px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-900';
       }
     } catch (error) {
-      summaryDiv.textContent = `âš  ${error.message}`;
+      summaryDiv.textContent = `\u26A0 ${error.message}`;
       summaryDiv.className = 'px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-900';
     }
   }
 
   /**
-   * Extrait la configuration de rÃ©currence du formulaire
+   * Extrait la configuration de récurrence du formulaire
    * @returns {Object|null}
    */
   function extractRecurrenceConfig() {
@@ -558,7 +558,7 @@
       const weekdayCheckboxes = document.querySelectorAll('input[name="task-recurrence-weekday"]:checked');
       weekdays = Array.from(weekdayCheckboxes).map(cb => parseInt(cb.value, 10));
       if (weekdays.length === 0) {
-        throw new Error('SÃ©lectionnez au moins un jour de la semaine');
+        throw new Error('Sélectionnez au moins un jour de la semaine');
       }
     }
 
@@ -573,11 +573,11 @@
         .map(s => parseInt(s.trim(), 10))
         .filter(n => !isNaN(n) && n >= 1 && n <= 31);
       if (monthDays.length === 0) {
-        throw new Error('Les jours doivent Ãªtre des nombres entre 1 et 31');
+        throw new Error('Les jours doivent être des nombres entre 1 et 31');
       }
     }
 
-    // Extraire les dates de l'annÃ©e
+    // Extraire les dates de l'année
     if (frequency === 'yearly') {
       const yearDatesInput = document.getElementById('task-recurrence-year-dates');
       const yearDatesStr = (yearDatesInput?.value || '').trim();
@@ -588,12 +588,12 @@
         .map(s => s.trim())
         .filter(s => /^\d{2}-\d{2}$/.test(s));
       if (yearDates.length === 0) {
-        throw new Error('Les dates doivent Ãªtre au format MM-DD');
+        throw new Error('Les dates doivent être au format MM-DD');
       }
     }
 
     if (!startDate) {
-      throw new Error('La date de dÃ©part est obligatoire');
+      throw new Error('La date de départ est obligatoire');
     }
 
     const config = {
@@ -607,12 +607,12 @@
       startDate
     };
 
-    // Ajouter les propriÃ©tÃ©s de fin selon le type
+    // Ajouter les propriétés de fin selon le type
     if (endType === 'count') {
       const endCountInput = document.getElementById('task-recurrence-end-count');
       const endCount = parseInt(endCountInput?.value || '10', 10);
       if (endCount < 1) {
-        throw new Error('Le nombre d\'occurrences doit Ãªtre >= 1');
+        throw new Error('Le nombre d\'occurrences doit être >= 1');
       }
       config.endCount = endCount;
     } else if (endType === 'until') {
@@ -627,8 +627,8 @@
   }
 
   /**
-   * Remplit le formulaire avec une configuration de rÃ©currence existante
-   * @param {Object} config - Configuration de rÃ©currence
+   * Remplit le formulaire avec une configuration de récurrence existante
+   * @param {Object} config - Configuration de récurrence
    */
   function populateRecurrenceForm(config) {
     if (!config || !config.enabled) {
@@ -647,17 +647,17 @@
     const configDiv = document.getElementById('task-recurrence-config');
     if (configDiv) configDiv.classList.remove('hidden');
     
-    // Masquer l'Ã‰chÃ©ance quand la rÃ©currence est activÃ©e
+    // Masquer l'échéance quand la récurrence est activée
     const dueDateWrap = document.getElementById('task-due-date-wrap');
     if (dueDateWrap) dueDateWrap.classList.add('hidden');
     
-    // Mettre Ã  jour le label de la date de dÃ©part
+    // Mettre à jour le label de la date de départ
     const startDateLabel = document.getElementById('task-recurrence-start-date-label');
     if (startDateLabel) {
-      startDateLabel.textContent = 'Date de premiÃ¨re occurrence';
+      startDateLabel.textContent = 'Date de première occurrence';
     }
 
-    // Remplir le type de rÃ©currence
+    // Remplir le type de récurrence
     const typeSelect = document.getElementById('task-recurrence-type');
     if (typeSelect && config.frequency) {
       typeSelect.value = config.frequency;
@@ -686,7 +686,7 @@
       }
     }
 
-    // Remplir les dates de l'annÃ©e
+    // Remplir les dates de l'année
     if (config.frequency === 'yearly' && Array.isArray(config.yearDates)) {
       const yearDatesInput = document.getElementById('task-recurrence-year-dates');
       if (yearDatesInput) {
@@ -694,7 +694,7 @@
       }
     }
 
-    // Remplir la date de dÃ©part
+    // Remplir la date de départ
     const startDateInput = document.getElementById('task-recurrence-start-date');
     if (startDateInput && config.startDate) {
       startDateInput.value = config.startDate;
@@ -727,7 +727,7 @@
   }
 
   /**
-   * RÃ©initialise le formulaire de rÃ©currence
+   * Réinitialise le formulaire de récurrence
    */
   function resetRecurrenceForm() {
     const enableCheckbox = document.getElementById('task-recurrence-enabled');
@@ -736,17 +736,17 @@
     const configDiv = document.getElementById('task-recurrence-config');
     if (configDiv) configDiv.classList.add('hidden');
     
-    // Afficher l'Ã‰chÃ©ance
+    // Afficher l'échéance
     const dueDateWrap = document.getElementById('task-due-date-wrap');
     if (dueDateWrap) dueDateWrap.classList.remove('hidden');
     
     // Restaurer le label original
     const startDateLabel = document.getElementById('task-recurrence-start-date-label');
     if (startDateLabel) {
-      startDateLabel.textContent = 'Date de dÃ©part';
+      startDateLabel.textContent = 'Date de départ';
     }
 
-    // RÃ©initialiser tous les champs
+    // Réinitialiser tous les champs
     document.getElementById('task-recurrence-type').value = 'weekly';
     document.getElementById('task-recurrence-interval').value = '1';
     document.getElementById('task-recurrence-month-days').value = '';
@@ -756,12 +756,12 @@
     document.getElementById('task-recurrence-end-count').value = '10';
     document.getElementById('task-recurrence-end-date').value = '';
 
-    // RÃ©initialiser les checkboxes
+    // Réinitialiser les checkboxes
     document.querySelectorAll('input[name="task-recurrence-weekday"]').forEach(cb => {
-      cb.checked = cb.value === '1'; // Lundi par dÃ©faut
+      cb.checked = cb.value === '1'; // Lundi par défaut
     });
 
-    // Remasquer les sections spÃ©cifiques
+    // Remasquer les sections spécifiques
     updateRecurrenceTypeUI();
     updateRecurrenceEndTypeUI();
   }

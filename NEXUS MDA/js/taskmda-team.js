@@ -9740,6 +9740,10 @@
     }
 
     function formatTaskDeadline(task) {
+      if (task?.recurring?.enabled) {
+        const ymd = normalizeCalendarYmd(task?.dueDate || '');
+        if (ymd) return formatDate(ymd);
+      }
       return formatDeadlineLabel(task, task?.dueDate || '');
     }
 
@@ -10052,12 +10056,21 @@
       if (didCompleteOccurrence && allowRecurringRollover && !isArchiveTransition && task?.recurring?.enabled) {
         const nextDueDate = computeTaskRecurringNextDueDateAfterCompletion(task, { referenceTs: nowTs });
         if (nextDueDate) {
+          // `normalizeTaskOrProjectDeadline` / cartes lisent `deadlineDate` avant le fallback `dueDate` :
+          // ne mettre à jour que `dueDate` laissait l'échéance affichée figée après rollover.
           return {
             changes: {
               ...changes,
               status: 'todo',
               completedAt: null,
-              dueDate: nextDueDate
+              dueDate: nextDueDate,
+              deadlineMode: 'date',
+              deadlineDate: nextDueDate,
+              deadlineAt: nextDueDate,
+              deadlineMonth: null,
+              deadlineYear: null,
+              deadlineStart: null,
+              deadlineEnd: null
             },
             recurringRolloverApplied: true,
             nextDueDate,
@@ -10221,6 +10234,12 @@
     }
 
     function taskDueDateKey(task) {
+      // Récurrence : la prochaine occurrence est persistée dans `dueDate` après rollover.
+      // Ne pas laisser `deadlineDate` / champs flexibles plus anciens masquer cette date.
+      if (task?.recurring?.enabled) {
+        const direct = normalizeCalendarYmd(task?.dueDate || '');
+        if (direct) return direct;
+      }
       const normalized = normalizeTaskOrProjectDeadline(task, task?.dueDate || '');
       const dueDate = normalized.dueDate || '';
       if (!dueDate) return null;

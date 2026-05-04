@@ -1,5 +1,20 @@
 # Changelog - TaskMDA Team
 
+## Mise a jour incrementale - Mai 2026 (Recurrence UI + echeance taches recurrentes)
+
+- Correctif encodage:
+  - `js/taskmda-recurrence.js` : libellés et commentaires UTF-8 (remplacement des sequences type `premiÃ¨re`, `âœ"` / `âš ` par texte francais correct et sequences Unicode `\u2713` / `\u26A0`).
+  - correctifs ponctuels de mojibake dans `js/taskmda-global.js` et `js/taskmda-doc.js` (messages « piece jointe de tache »).
+- Correctif echeance affichee (complement):
+  - `taskDueDateKey` : pour une tache avec `recurring.enabled`, la date canonique de la prochaine occurrence est desormais `dueDate` (YMD) si presente, avant le calcul flexible `deadlineDate` / `deadlineMode` qui pouvait rester sur l ancienne occurrence.
+  - rollover : alignement supplementaire de `deadlineAt` sur la prochaine date.
+
+## Mise a jour incrementale - Mai 2026 (Taches recurrentes: rollover echeance affichee)
+
+- Correctif:
+  - apres « Realise » sur une occurrence, le rollover ne mettait a jour que `dueDate` ; l UI et `normalizeTaskOrProjectDeadline` privilegient `deadlineDate` quand le mode echeance est `date`, ce qui laissait cartes / fiche en retard sur l ancienne date.
+  - le rollover aligne desormais `deadlineMode`, `deadlineDate` et reinitialise les champs mois/annee/periode pour rester coherent avec la prochaine occurrence.
+
 ## Mise a jour incrementale - Mai 2026 (Notes globales: correctif barre latérale Thématiques)
 
 - Correctif bloquant:

@@ -648,7 +648,7 @@
           return;
         }
         if (doc.sourceType === 'project') {
-          helpers.showToast?.('Ce document est une piÃ¨ce jointe de tÃ¢che: modifiez la tÃ¢che pour le dÃ©placer.');
+          helpers.showToast?.('Ce document est une pièce jointe de tâche : modifiez la tâche pour le déplacer.');
           return;
         }
         if (!['standalone', 'project-doc'].includes(doc.sourceType)) {
@@ -658,7 +658,7 @@
         if (doc.sourceType === 'project-doc') {
           const sourceState = await actions.getProjectState?.(doc.sourceProjectId);
           if (!sourceState?.project || !actions.canEditProjectMeta?.(sourceState)) {
-            helpers.showToast?.('Action non autorisÃ©e');
+            helpers.showToast?.('Action non autorisée');
             return;
           }
         }

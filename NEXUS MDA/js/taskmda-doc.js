@@ -702,8 +702,8 @@
       const safeCtx = ctx && typeof ctx === 'object' ? ctx : {};
       if (safeCtx.sourceType === 'standalone') return 'Hors projet';
       if (safeCtx.sourceType === 'project-doc') return String(safeCtx.sourceProjectName || 'Document projet');
-      if (safeCtx.sourceType === 'project') return String(safeCtx.sourceProjectName || 'PiÃ¨ce jointe de tÃ¢che');
-      if (safeCtx.sourceType === 'task-attachment') return String(safeCtx.sourceProjectName || 'PiÃ¨ce jointe de tÃ¢che');
+      if (safeCtx.sourceType === 'project') return String(safeCtx.sourceProjectName || 'Pièce jointe de tâche');
+      if (safeCtx.sourceType === 'task-attachment') return String(safeCtx.sourceProjectName || 'Pièce jointe de tâche');
       return 'Document';
     }
 
