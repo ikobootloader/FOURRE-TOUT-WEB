@@ -922,6 +922,12 @@
       document.getElementById('global-doc-upload-theme-known')?.addEventListener('change', () => {
         opts.syncThemePickerInputFromSelection?.('global-doc-upload-theme-known', 'global-doc-upload-theme');
       });
+      document.getElementById('global-note-theme')?.addEventListener('input', () => {
+        opts.syncThemePickerSelectionFromInput?.('global-note-theme-known', 'global-note-theme');
+      });
+      document.getElementById('global-note-theme-known')?.addEventListener('change', () => {
+        opts.syncThemePickerInputFromSelection?.('global-note-theme-known', 'global-note-theme');
+      });
     }
 
     return {

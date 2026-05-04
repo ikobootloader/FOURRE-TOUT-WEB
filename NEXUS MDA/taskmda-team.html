@@ -2420,6 +2420,16 @@
           <div id="global-note-content-editor" class="project-description-editor task-description-editor" contenteditable="true" aria-label="Contenu de la note transverse"></div>
           <textarea id="global-note-content" rows="5" class="hidden"></textarea>
         </div>
+        <div>
+          <label for="global-note-theme" class="block text-sm font-semibold mb-1">Thématique</label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <input id="global-note-theme" type="text" placeholder="Thématique de la note (optionnel)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <select id="global-note-theme-known" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir une thématique du référentiel ou déjà utilisée sur une note">
+              <option value="">Thématiques existantes...</option>
+            </select>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Saisie libre ou liste (référentiel + thématiques déjà utilisées sur des notes). Les tags restent indépendants.</p>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input id="global-note-tags" type="text" placeholder="Tags: budget, gouvernance, priorite..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
           <select id="global-note-linked-task" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -2439,7 +2449,6 @@
             </div>
           </div>
         </div>
-        <input id="global-note-theme" type="hidden" value="">
         <div class="flex flex-wrap items-center gap-4 text-sm">
           <label class="inline-flex items-center gap-2"><input id="global-note-transverse" type="checkbox" checked> <span>Note transverse</span></label>
           <label class="inline-flex items-center gap-2"><input id="global-note-share-feed" type="checkbox"> <span>Publier aussi dans le fil transverse</span></label>

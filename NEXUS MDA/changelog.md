@@ -1,5 +1,19 @@
 # Changelog - TaskMDA Team
 
+## Mise a jour incrementale - Mai 2026 (Notes globales: correctif barre latérale Thématiques)
+
+- Correctif bloquant:
+  - `renderGlobalNotesThemeTabs` avait été fusionné par erreur dans `TaskMDAMessageReactionsOutsideUI` au lieu de `TaskMDAGlobalNotesFiltersUI` : l’orchestrateur appelait une méthode absente, donc aucun onglet ne s’affichait sous « Thématiques ».
+  - fonction déplacée et exportée depuis `TaskMDAGlobalNotesFiltersUI` ; regroupement aligné sur les notes de projet (tags comme facettes, sinon champ `theme`, sinon « Sans thematique ») ; filtre de liste synchronisé dans `renderGlobalNotes`.
+
+## Mise a jour incrementale - Mai 2026 (Notes globales: thématique modale + barre latérale)
+
+- Correctif UX / données:
+  - la modale « Nouvelle note » utilisait un champ `global-note-theme` de type `hidden` sans contrôle visible : la thématique saisie n’était pas portée par la note, donc aucun onglet dans la barre latérale « Thématiques » de la rubrique Notes.
+  - ajout d’un couple champ texte + liste « Thématiques existantes… » (référentiel + thèmes déjà présents sur des notes), aligné sur le comportement de l’upload documentaire global.
+  - branchement des événements de synchronisation champ / liste dans `TaskMDADocThemePickersUI` (shell).
+  - harmonisation du thème utilisé pour les pièces jointes : priorité au champ thématique explicite, puis au premier tag, puis `General`.
+
 ## Mise a jour incrementale - Mai 2026 (Scission module calendrier)
 
 - Refactor sans impact fonctionnel:

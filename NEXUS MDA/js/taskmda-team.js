@@ -12853,6 +12853,17 @@ async function setProjectsPage(page) {
       return tags.length > 0 ? tags : ['Sans thematique'];
     }
 
+    /** Même règle que `TaskMDAGlobalNotesFiltersUI` : tags prioritaires, sinon `theme`, sinon seau unique. */
+    function getGlobalNoteThemeLabels(note) {
+      const tags = Array.isArray(note?.tags)
+        ? Array.from(new Set(note.tags.map((tag) => String(tag || '').trim()).filter(Boolean)))
+        : [];
+      if (tags.length > 0) return tags;
+      const theme = String(note?.theme || '').trim();
+      if (theme) return [theme];
+      return ['Sans thematique'];
+    }
+
     function buildProjectNotesThemeCatalog(notes = []) {
       const map = new Map();
       (Array.isArray(notes) ? notes : []).forEach((note) => {
@@ -15222,6 +15233,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }
       const titleInput = document.getElementById('global-note-title');
       const themeInput = document.getElementById('global-note-theme');
+      const themeKnownSelect = document.getElementById('global-note-theme-known');
       const tagsInput = document.getElementById('global-note-tags');
       const transverseInput = document.getElementById('global-note-transverse');
       const shareInput = document.getElementById('global-note-share-feed');
@@ -15243,7 +15255,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (attachInput) attachInput.value = '';
       updateGlobalNoteAttachmentFilesSummary();
       if (attachBtn) attachBtn.disabled = false;
-      [titleInput, themeInput, tagsInput, transverseInput, shareInput].forEach((el) => {
+      [titleInput, themeInput, themeKnownSelect, tagsInput, transverseInput, shareInput].forEach((el) => {
         if (el) el.disabled = false;
       });
       const quill = projectDescriptionQuillEditors.get('global-note-content-editor');
@@ -15269,6 +15281,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const titleEl = document.getElementById('global-note-modal-title');
       const titleInput = document.getElementById('global-note-title');
       const themeInput = document.getElementById('global-note-theme');
+      const themeKnownSelect = document.getElementById('global-note-theme-known');
       const tagsInput = document.getElementById('global-note-tags');
       const transverseInput = document.getElementById('global-note-transverse');
       const shareInput = document.getElementById('global-note-share-feed');
@@ -15308,12 +15321,13 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         if (transverseInput) transverseInput.checked = normalizeGlobalNoteVisibility(note?.visibility || 'transverse') === 'transverse';
         if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
       }
+      await refreshGlobalNoteThemePicker();
       if (deleteBtn) deleteBtn.classList.toggle('hidden', !note || !canManage);
       if (saveBtn) saveBtn.classList.toggle('hidden', !canManage);
       if (digestBtn) digestBtn.classList.toggle('hidden', !canManage);
       if (attachBtn) attachBtn.classList.toggle('hidden', !canManage);
       if (attachBtn) attachBtn.disabled = !canManage;
-      [titleInput, themeInput, tagsInput, transverseInput, shareInput].forEach((el) => {
+      [titleInput, themeInput, themeKnownSelect, tagsInput, transverseInput, shareInput].forEach((el) => {
         if (el) el.disabled = !canManage;
       });
       setProjectDescriptionEditorContent(
@@ -15338,7 +15352,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     async function saveGlobalNoteFromEditor() {
       const draft = readGlobalNoteEditorDraft();
-      const noteTheme = String((Array.isArray(draft.tags) && draft.tags.length > 0 ? draft.tags[0] : (draft.theme || 'General')) || 'General').trim() || 'General';
+      const effectiveThemeForAttachments = String(draft.theme || '').trim()
+        || (Array.isArray(draft.tags) && draft.tags.length > 0 ? String(draft.tags[0] || '').trim() : '');
+      const noteTheme = effectiveThemeForAttachments || 'General';
       const noteAttachmentDocs = await readDocumentFilesFromInput('global-note-attach-doc-files', {
         projectId: 'global',
         scope: 'global',
@@ -16184,8 +16200,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           if (globalNotesTabMode === 'transverse' && visibility !== 'transverse') return false;
           if (globalNotesTabMode === 'published' && note.shareToGlobalFeed !== true) return false;
           if (globalNotesThemeFilter !== 'all') {
-            const themeKey = normalizeCatalogKey(String(note?.theme || '').trim() || 'Sans thematique');
-            if (themeKey !== globalNotesThemeFilter) return false;
+            const match = getGlobalNoteThemeLabels(note).some(
+              (label) => normalizeCatalogKey(label) === globalNotesThemeFilter
+            );
+            if (!match) return false;
           }
           if (!queryNeedle) return true;
           const blob = normalizeSearch([
@@ -20117,6 +20135,28 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         ...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim()))
       ];
       fillThemePicker('global-doc-upload-theme-known', 'global-doc-upload-theme', themes, 'Thématiques existantes...');
+    }
+
+    /**
+     * Alimente le sélecteur de thématique de la modale Notes globales (référentiel + thèmes déjà portés par des notes).
+     * Le champ texte #global-note-theme doit être renseigné avant l'appel pour que la liste déroulante reflète la sélection courante.
+     */
+    async function refreshGlobalNoteThemePicker() {
+      const select = document.getElementById('global-note-theme-known');
+      const input = document.getElementById('global-note-theme');
+      if (!select || !input) return;
+      let fromNotes = [];
+      try {
+        const allNotes = await getAllDecrypted('globalNotes', 'noteId');
+        fromNotes = (Array.isArray(allNotes) ? allNotes : [])
+          .map((n) => String(n?.theme || '').trim())
+          .filter(Boolean);
+      } catch (e) {
+        fromNotes = [];
+      }
+      const fromCatalog = (globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim());
+      const themes = [...fromNotes, ...fromCatalog];
+      fillThemePicker('global-note-theme-known', 'global-note-theme', themes, 'Thématiques existantes...');
     }
 
     function refreshProjectDocumentTaskOptions(state) {
