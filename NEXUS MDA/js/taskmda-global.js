@@ -620,6 +620,46 @@
       }, 900));
     }
 
+    async function resolveDocumentForBinding(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return null;
+      const all = await actions.getGlobalDocumentsList?.();
+      const fromGlobal = (all || []).find((item) => String(item.id || '') === id);
+      if (fromGlobal) return fromGlobal;
+
+      const marker = ':project-doc:';
+      const markerIndex = id.indexOf(marker);
+      if (markerIndex <= 0) return null;
+      const sourceProjectId = id.slice(0, markerIndex);
+      const sourceDocId = id.slice(markerIndex + marker.length);
+      if (!sourceProjectId || !sourceDocId) return null;
+
+      const sourceState = await actions.getProjectState?.(sourceProjectId);
+      if (!sourceState?.project) return null;
+      const sourceDoc = (sourceState.documents || []).find((item) => String(item.docId || '') === sourceDocId);
+      if (!sourceDoc) return null;
+
+      return {
+        id,
+        name: sourceDoc.name,
+        type: sourceDoc.type,
+        size: sourceDoc.size,
+        data: sourceDoc.data,
+        theme: sourceDoc.theme || sourceState.project.name || 'Projet',
+        sourceProjectName: sourceState.project.name,
+        sourceProjectId,
+        docId: sourceDoc.docId,
+        linkedTaskIds: Array.isArray(sourceDoc.linkedTaskIds) ? [...sourceDoc.linkedTaskIds] : [],
+        sourceType: 'project-doc',
+        sharingMode: helpers.normalizeSharingMode?.(
+          sourceDoc.sharingMode,
+          helpers.normalizeSharingMode?.(sourceState.project.sharingMode, 'shared') || 'shared'
+        ) || 'shared',
+        notes: sourceDoc.notes || '',
+        createdAt: sourceDoc.uploadedAt || sourceDoc.createdAt || sourceState.project.createdAt || 0
+      };
+    }
+
     function closeDocumentBindingModal() {
       state.setCurrentDocBindingContext?.(null);
       state.setCurrentDocBindingCanEdit?.(false);

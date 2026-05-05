@@ -31048,7 +31048,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       updateDocumentEditorFileSummary();
 
       if (mode === 'text') {
-        textarea.value = decodeDataUrlToText(context.doc?.data || '');
+        textarea.value = decodeDataUrlToText(safeContext.doc?.data || '');
         textarea.focus();
       } else if (mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx') {
         textarea.value = '';
@@ -31058,11 +31058,11 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         docSpreadsheetEditorState.sheetName = '';
         docSpreadsheetEditorState.xlsxColumns = 8;
         if (mode === 'spreadsheet-css') {
-          const cssText = decodeDataUrlToText(context.doc?.data || '');
+          const cssText = decodeDataUrlToText(safeContext.doc?.data || '');
           docSpreadsheetEditorState.cssRows = parseCssToTableRows(cssText);
           setSpreadsheetEditorTab('css');
         } else {
-          const bytes = decodeDataUrlToBytes(context.doc?.data || '');
+          const bytes = decodeDataUrlToBytes(safeContext.doc?.data || '');
           let workbook = null;
           try {
             workbook = bytes?.length ? window.XLSX.read(bytes, { type: 'array' }) : window.XLSX.utils.book_new();
@@ -33712,7 +33712,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             resolveDocumentPreviewContext,
             openDocumentPreview,
             sanitizeDownloadHref,
-            resolveDocumentForBinding,
             resolveDocumentDataForRuntime,
             maybeRelocateStoredDocumentByTheme,
             inferStorageRubricFromPath,
