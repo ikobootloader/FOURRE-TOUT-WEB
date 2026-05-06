@@ -13235,6 +13235,9 @@ async function setProjectsPage(page) {
         String(note?.contentHtml || '').trim() || plainTextToRichHtml(String(note?.content || '').trim())
       );
       if (attachmentsInput) attachmentsInput.value = '';
+      pendingLinkedProjectNoteDocs = [];
+      refreshLinkedPendingSummaries();
+      refreshLinkedPendingSummaries();
       updateProjectNoteAttachmentFilesSummary();
       populateProjectNoteTaskOptions(state, Array.isArray(note?.linkedTaskIds) ? (note.linkedTaskIds[0] || '') : '');
       setProjectNoteSaveButtonLabel(note ? 'Mettre à jour la note' : 'Enregistrer la note');
@@ -13324,6 +13327,9 @@ async function setProjectsPage(page) {
       }
       if (taskSelect) taskSelect.value = '';
       if (attachmentsInput) attachmentsInput.value = '';
+      pendingLinkedProjectNoteDocs = [];
+      refreshLinkedPendingSummaries();
+      refreshLinkedPendingSummaries();
       updateProjectNoteAttachmentFilesSummary();
       setProjectNoteSaveButtonLabel('Enregistrer la note');
       if (!notesShared?.applyEditorForm && modalTitle) modalTitle.textContent = 'Nouvelle note';
@@ -13485,7 +13491,8 @@ async function setProjectsPage(page) {
         rubric: 'project-note-attachment',
         theme: noteTheme || 'General'
       });
-      if (!draft.title && !draft.content && (!Array.isArray(noteAttachmentDocs) || noteAttachmentDocs.length === 0)) {
+      const allNoteAttachmentDocs = mergeLinkedDocumentsWithUploads(noteAttachmentDocs, pendingLinkedProjectNoteDocs);
+      if (!draft.title && !draft.content && (!Array.isArray(allNoteAttachmentDocs) || allNoteAttachmentDocs.length === 0)) {
         showToast('Ajoutez un titre ou un contenu');
         return;
       }
@@ -13532,13 +13539,13 @@ async function setProjectsPage(page) {
       );
       await publishEvent(event);
       if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
-      if (Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0) {
+      if (Array.isArray(allNoteAttachmentDocs) && allNoteAttachmentDocs.length > 0) {
         const validTaskIds = new Set((state.tasks || []).map((task) => String(task?.taskId || '').trim()).filter(Boolean));
         const safeLinkedTaskIds = (Array.isArray(draft.linkedTaskIds) ? draft.linkedTaskIds : [])
           .map((taskId) => String(taskId || '').trim())
           .filter((taskId) => validTaskIds.has(taskId));
         const noteTitleLabel = String(draft.title || existing?.title || 'Note').trim() || 'Note';
-        const docEvents = noteAttachmentDocs.map((docFile) => createEvent(
+        const docEvents = allNoteAttachmentDocs.map((docFile) => createEvent(
           EventTypes.CREATE_DOCUMENT,
           currentProjectId,
           currentUser.userId,
@@ -13556,6 +13563,8 @@ async function setProjectsPage(page) {
         }
         if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, docEvents); }
       }
+      pendingLinkedProjectNoteDocs = [];
+      refreshLinkedPendingSummaries();
       saveProjectNoteDraft(null, currentProjectId, existing ? existing.noteId : '');
       saveProjectNoteDraft(null, currentProjectId, '');
       await syncProjectNoteGlobalFeed(currentProjectId, noteId);
@@ -15331,6 +15340,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const themeInput = document.getElementById('global-note-theme');
       const themeKnownSelect = document.getElementById('global-note-theme-known');
       const tagsInput = document.getElementById('global-note-tags');
+      const tagsKnownSelect = document.getElementById('global-note-tags-known');
+      const linkedTaskSelect = document.getElementById('global-note-linked-task');
       const transverseInput = document.getElementById('global-note-transverse');
       const shareInput = document.getElementById('global-note-share-feed');
       const deleteBtn = document.getElementById('btn-global-note-delete');
@@ -15342,6 +15353,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         if (titleInput) titleInput.value = '';
         if (themeInput) themeInput.value = '';
         if (tagsInput) tagsInput.value = '';
+        if (tagsKnownSelect) tagsKnownSelect.value = '';
+        if (linkedTaskSelect) linkedTaskSelect.value = '';
         if (transverseInput) transverseInput.checked = false;
         if (shareInput) shareInput.checked = false;
         if (deleteBtn) deleteBtn.classList.add('hidden');
@@ -15349,11 +15362,15 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         if (digestBtn) digestBtn.classList.remove('hidden');
       }
       if (attachInput) attachInput.value = '';
+      pendingLinkedGlobalNoteDocs = [];
+      refreshLinkedPendingSummaries();
+      refreshLinkedPendingSummaries();
       updateGlobalNoteAttachmentFilesSummary();
       if (attachBtn) attachBtn.disabled = false;
-      [titleInput, themeInput, themeKnownSelect, tagsInput, transverseInput, shareInput].forEach((el) => {
+      [titleInput, themeInput, themeKnownSelect, tagsInput, tagsKnownSelect, linkedTaskSelect, transverseInput, shareInput].forEach((el) => {
         if (el) el.disabled = false;
       });
+      syncGlobalNoteKnownTagsVisibility();
       const quill = projectDescriptionQuillEditors.get('global-note-content-editor');
       if (quill) quill.enable(true);
       setProjectDescriptionEditorContent('global-note-content-editor', 'global-note-content', '');
@@ -15379,6 +15396,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const themeInput = document.getElementById('global-note-theme');
       const themeKnownSelect = document.getElementById('global-note-theme-known');
       const tagsInput = document.getElementById('global-note-tags');
+      const tagsKnownSelect = document.getElementById('global-note-tags-known');
+      const linkedTaskSelect = document.getElementById('global-note-linked-task');
       const transverseInput = document.getElementById('global-note-transverse');
       const shareInput = document.getElementById('global-note-share-feed');
       const deleteBtn = document.getElementById('btn-global-note-delete');
@@ -15414,18 +15433,30 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         if (titleInput) titleInput.value = String(note?.title || '');
         if (themeInput) themeInput.value = String(note?.theme || '');
         if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
+        if (tagsKnownSelect) tagsKnownSelect.value = '';
+        if (linkedTaskSelect) linkedTaskSelect.value = '';
         if (transverseInput) transverseInput.checked = normalizeGlobalNoteVisibility(note?.visibility || 'private') === 'transverse';
         if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
       }
       await refreshGlobalNoteThemePicker();
+      await refreshGlobalNoteKnownTagsPicker();
       if (deleteBtn) deleteBtn.classList.toggle('hidden', !note || !canManage);
       if (saveBtn) saveBtn.classList.toggle('hidden', !canManage);
       if (digestBtn) digestBtn.classList.toggle('hidden', !canManage);
       if (attachBtn) attachBtn.classList.toggle('hidden', !canManage);
       if (attachBtn) attachBtn.disabled = !canManage;
-      [titleInput, themeInput, themeKnownSelect, tagsInput, transverseInput, shareInput].forEach((el) => {
+      [titleInput, themeInput, themeKnownSelect, tagsInput, tagsKnownSelect, linkedTaskSelect, transverseInput, shareInput].forEach((el) => {
         if (el) el.disabled = !canManage;
       });
+      if (tagsKnownSelect && !tagsKnownSelect.dataset.bound) {
+        tagsKnownSelect.addEventListener('change', appendGlobalNoteTagFromKnownList);
+        tagsKnownSelect.dataset.bound = '1';
+      }
+      if (linkedTaskSelect && !linkedTaskSelect.dataset.bound) {
+        linkedTaskSelect.addEventListener('change', syncGlobalNoteKnownTagsVisibility);
+        linkedTaskSelect.dataset.bound = '1';
+      }
+      syncGlobalNoteKnownTagsVisibility();
       setProjectDescriptionEditorContent(
         'global-note-content-editor',
         'global-note-content',
@@ -15457,15 +15488,31 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         rubric: 'global-note-attachment',
         theme: noteTheme
       });
-      if (!draft.title && !draft.content && (!Array.isArray(noteAttachmentDocs) || noteAttachmentDocs.length === 0)) {
+      const allNoteAttachmentDocs = mergeLinkedDocumentsWithUploads(noteAttachmentDocs, pendingLinkedGlobalNoteDocs);
+      if (!draft.title && !draft.content && (!Array.isArray(allNoteAttachmentDocs) || allNoteAttachmentDocs.length === 0)) {
         showToast('Ajoutez un titre, un contenu ou une pièce jointe');
         return;
       }
       const nowTs = Date.now();
       const notes = await getAllDecrypted('globalNotes', 'noteId');
-      const existing = editingGlobalNoteId
+      let existing = editingGlobalNoteId
         ? (notes || []).find((item) => String(item?.noteId || '').trim() === String(editingGlobalNoteId || '').trim())
         : null;
+      let mergedByTitle = false;
+      if (!existing) {
+        const normalizedDraftTitle = String(draft.title || '').trim().toLocaleLowerCase('fr');
+        if (normalizedDraftTitle) {
+          const candidates = (Array.isArray(notes) ? notes : [])
+            .filter((item) => !Number(item?.archivedAt || 0))
+            .filter((item) => String(item?.title || '').trim().toLocaleLowerCase('fr') === normalizedDraftTitle)
+            .sort((a, b) => Number(b?.updatedAt || b?.createdAt || 0) - Number(a?.updatedAt || a?.createdAt || 0));
+          if (candidates.length > 0) {
+            existing = candidates[0];
+            mergedByTitle = true;
+          }
+        }
+      }
+      let savedNote = null;
       if (existing && !canManageGlobalNote(existing)) {
         showToast('Action non autorisee');
         return;
@@ -15476,8 +15523,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         : [];
       const createdDocIds = [];
       try {
-        if (Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0) {
-          for (const docFile of noteAttachmentDocs) {
+        if (Array.isArray(allNoteAttachmentDocs) && allNoteAttachmentDocs.length > 0) {
+          for (const docFile of allNoteAttachmentDocs) {
             const docId = uuidv4();
             createdDocIds.push(docId);
             await putEncrypted('globalDocs', {
@@ -15499,12 +15546,24 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           }
         }
         const linkedDocIds = Array.from(new Set([...existingLinkedDocIds, ...createdDocIds]));
+        const incomingContentHtml = String(draft.contentHtml || '').trim();
+        const previousContentHtml = String(existing?.contentHtml || '').trim()
+          || plainTextToRichHtml(String(existing?.content || '').trim());
+        let mergedContentHtml = incomingContentHtml;
+        if (mergedByTitle) {
+          if (incomingContentHtml && previousContentHtml) {
+            mergedContentHtml = `<section data-note-merge-latest="1">${incomingContentHtml}</section><div><br></div><hr><div><br></div><section data-note-merge-history="1">${previousContentHtml}</section>`;
+          } else if (!incomingContentHtml && previousContentHtml) {
+            mergedContentHtml = previousContentHtml;
+          }
+        }
+        const mergedContentText = String(getProjectDescriptionPlainText(mergedContentHtml || '') || '').trim();
         const note = {
           ...(existing || {}),
           noteId,
           title: draft.title,
-          content: draft.content,
-          contentHtml: draft.contentHtml,
+          content: mergedContentText || draft.content,
+          contentHtml: mergedContentHtml || draft.contentHtml,
           tags: draft.tags,
           theme: String(draft.theme || '').trim(),
           linkedDocIds,
@@ -15516,6 +15575,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           updatedAt: nowTs,
           archivedAt: null
         };
+        savedNote = note;
         await putEncrypted('globalNotes', note, 'noteId');
         await syncGlobalNoteLinkedDocuments(note.noteId, note.linkedDocIds);
         await syncGlobalNoteFeed(note);
@@ -15523,17 +15583,19 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         await cleanupGlobalDocsByIds(createdDocIds);
         throw error;
       }
+      pendingLinkedGlobalNoteDocs = [];
+      refreshLinkedPendingSummaries();
       if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
         await renderGlobalFeed();
       }
       closeGlobalNoteEditor();
-      globalNotesFocusNoteId = String(note.noteId || '');
+      globalNotesFocusNoteId = String(savedNote?.noteId || '');
       await renderGlobalNotes();
-      if (Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0) {
-        const label = existing ? 'Note mise a jour' : 'Note creee';
-        showToast(`${label} + ${noteAttachmentDocs.length} document(s) ajoute(s)`);
+      if (Array.isArray(allNoteAttachmentDocs) && allNoteAttachmentDocs.length > 0) {
+        const label = mergedByTitle ? 'Notes fusionnees' : (existing ? 'Note mise a jour' : 'Note creee');
+        showToast(`${label} + ${allNoteAttachmentDocs.length} document(s) ajoute(s)`);
       } else {
-        showToast(existing ? 'Note mise a jour' : 'Note creee');
+        showToast(mergedByTitle ? 'Notes fusionnees' : (existing ? 'Note mise a jour' : 'Note creee'));
       }
     }
 
@@ -20523,6 +20585,46 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       fillThemePicker('global-note-theme-known', 'global-note-theme', themes, 'Thématiques existantes...');
     }
 
+    async function refreshGlobalNoteKnownTagsPicker() {
+      const select = document.getElementById('global-note-tags-known');
+      if (!select) return;
+      let uniqueTags = [];
+      try {
+        const allNotes = await getAllDecrypted('globalNotes', 'noteId');
+        uniqueTags = Array.from(new Set(
+          (Array.isArray(allNotes) ? allNotes : [])
+            .flatMap((note) => Array.isArray(note?.tags) ? note.tags : [])
+            .map((tag) => String(tag || '').trim())
+            .filter(Boolean)
+        ));
+      } catch (_) {
+        uniqueTags = [];
+      }
+      uniqueTags.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+      select.innerHTML = `<option value="">Tags existants...</option>${uniqueTags.map((tag) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('')}`;
+    }
+
+    function syncGlobalNoteKnownTagsVisibility() {
+      const linkedTaskSelect = document.getElementById('global-note-linked-task');
+      const wrap = document.getElementById('global-note-tags-known-wrap');
+      if (!linkedTaskSelect || !wrap) return;
+      wrap.classList.toggle('hidden', Boolean(String(linkedTaskSelect.value || '').trim()));
+    }
+
+    function appendGlobalNoteTagFromKnownList() {
+      const tagsInput = document.getElementById('global-note-tags');
+      const knownTagsSelect = document.getElementById('global-note-tags-known');
+      if (!tagsInput || !knownTagsSelect) return;
+      const picked = String(knownTagsSelect.value || '').trim();
+      if (!picked) return;
+      const existing = normalizeProjectNoteTags(tagsInput.value || '');
+      if (!existing.includes(picked)) {
+        existing.push(picked);
+      }
+      tagsInput.value = existing.join(', ');
+      knownTagsSelect.value = '';
+    }
+
     function refreshProjectDocumentTaskOptions(state) {
       const select = document.getElementById('project-doc-task-links');
       if (!select) return;
@@ -20772,6 +20874,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function openTaskModal(task = null) {
+      pendingLinkedTaskDocs = [];
+      refreshLinkedPendingSummaries();
       if (taskLifecycleDomainRuntime?.openTaskModal) {
         taskLifecycleDomainRuntime.openTaskModal(task);
         return;
@@ -21434,6 +21538,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function openEditProjectModal(projectId = currentProjectId, fromDashboard = false) {
+      pendingLinkedEditProjectDocs = [];
+      refreshLinkedPendingSummaries();
+      refreshLinkedPendingSummaries();
       projectId = resolveProjectIdInput(projectId, currentProjectId);
       if (!projectId) return;
       const state = await getProjectState(projectId);
@@ -21560,6 +21667,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         rubric: 'project-edit-upload',
         theme: changes.name || state?.project?.name || 'General'
       });
+      const allEditProjectDocuments = mergeLinkedDocumentsWithUploads(editProjectDocuments, pendingLinkedEditProjectDocs);
       const existingGroupKeys = new Set((state.groups || []).map(g => normalizeCatalogKey(g.name)));
 
       const event = createEvent(
@@ -21588,7 +21696,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         sharedSyncEvents.push(addGroupEvent);
         addedGroupsCount += 1;
       }
-      for (const file of editProjectDocuments) {
+      for (const file of allEditProjectDocuments) {
         const addDocEvent = createEvent(
           EventTypes.CREATE_DOCUMENT,
           currentProjectId,
@@ -21616,6 +21724,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       document.getElementById('modal-edit-project').classList.add('hidden');
       const editProjectDocInput = document.getElementById('edit-project-doc-files');
       if (editProjectDocInput) editProjectDocInput.value = '';
+      pendingLinkedEditProjectDocs = [];
+      refreshLinkedPendingSummaries();
       const editPassphraseInput = document.getElementById('edit-project-passphrase');
       if (editPassphraseInput) editPassphraseInput.value = '';
       updateEditProjectDocFilesSummary();
@@ -24201,6 +24311,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     function openProjectDocUploadModal() {
       const modal = document.getElementById('modal-project-doc-upload');
       if (!modal) return;
+      pendingLinkedProjectDocs = [];
+      refreshLinkedPendingSummaries();
       modal.classList.remove('hidden');
       document.body.classList.add('overflow-hidden');
     }
@@ -24208,6 +24320,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     function closeProjectDocUploadModal() {
       const modal = document.getElementById('modal-project-doc-upload');
       if (!modal) return;
+      pendingLinkedProjectDocs = [];
+      refreshLinkedPendingSummaries();
       modal.classList.add('hidden');
       document.body.classList.remove('overflow-hidden');
     }
@@ -33068,7 +33182,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         rubric: 'project-doc-upload',
         theme: themeValue
       });
-      if (!files.length) {
+      const allFiles = mergeLinkedDocumentsWithUploads(files, pendingLinkedProjectDocs);
+      if (!allFiles.length) {
         showToast('Selectionnez au moins un document');
         return;
       }
@@ -33083,7 +33198,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       );
 
       await runWithLoading(async () => {
-      for (const file of files) {
+      for (const file of allFiles) {
         const event = createEvent(
           EventTypes.CREATE_DOCUMENT,
           currentProjectId,
@@ -33100,11 +33215,13 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }
       const input = document.getElementById('project-doc-files');
       if (input) input.value = '';
+      pendingLinkedProjectDocs = [];
+      refreshLinkedPendingSummaries();
       updateProjectDocFilesSummary();
       if (taskLinksSelect) taskLinksSelect.selectedIndex = -1;
       if (modeInput) modeInput.value = normalizeSharingMode(state.project?.sharingMode, 'private');
       });
-      addNotification('Document', `${files.length} document(s) ajoute(s)`, currentProjectId);
+      addNotification('Document', `${allFiles.length} document(s) ajoute(s)`, currentProjectId);
       showToast('Document(s) ajoute(s)');
       closeProjectDocUploadModal();
       await showProjectDetail(currentProjectId);
@@ -34014,6 +34131,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           normalizeSharingMode,
           normalizeSearch,
           fileToDataUrl,
+          resolveLinkedDocumentDataForRuntime,
           uuidv4
         })
       : null;
@@ -34427,6 +34545,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             canEditTaskInProject,
             addNotification,
             readDocumentFilesFromInput,
+            pickLinkedDocuments,
             refreshGlobalDocumentThemePicker,
             populateDocBindingTaskOptions,
             runWithoutGlobalLoading,
@@ -35095,6 +35214,24 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     document.getElementById('btn-open-project-doc-upload-modal')?.addEventListener('click', () => {
       openProjectDocUploadModal();
     });
+    document.getElementById('btn-project-doc-link')?.addEventListener('click', async () => {
+      await linkProjectDocuments();
+    });
+    document.getElementById('btn-project-note-link')?.addEventListener('click', async () => {
+      await linkProjectNoteDocuments();
+    });
+    document.getElementById('btn-global-note-link')?.addEventListener('click', async () => {
+      await linkGlobalNoteDocuments();
+    });
+    document.getElementById('btn-task-files-link')?.addEventListener('click', async () => {
+      await linkTaskDocuments();
+    });
+    document.getElementById('btn-project-create-doc-link')?.addEventListener('click', async () => {
+      await linkCreateProjectDocuments();
+    });
+    document.getElementById('btn-edit-project-doc-link')?.addEventListener('click', async () => {
+      await linkEditProjectDocuments();
+    });
     document.getElementById('btn-close-project-doc-upload-modal')?.addEventListener('click', () => {
       closeProjectDocUploadModal();
     });
@@ -35233,6 +35370,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     async function openNewProjectModal() {
       trackUxMetric('openNewProject');
+      pendingLinkedCreateProjectDocs = [];
+      refreshLinkedPendingSummaries();
+      refreshLinkedPendingSummaries();
       document.getElementById('modal-new-project').classList.remove('hidden');
       document.getElementById('project-name').value = '';
       setProjectDescriptionEditorContent('project-description-editor', 'project-description-input', '');
@@ -35264,6 +35404,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function closeNewProjectModal() {
+      pendingLinkedCreateProjectDocs = [];
+      refreshLinkedPendingSummaries();
+      refreshLinkedPendingSummaries();
       document.getElementById('modal-new-project').classList.add('hidden');
       const createProjectDocInput = document.getElementById('project-create-doc-files');
       if (createProjectDocInput) createProjectDocInput.value = '';
@@ -35282,6 +35425,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     async function closeEditProjectModal() {
       editProjectFromDashboard = false;
+      pendingLinkedEditProjectDocs = [];
+      refreshLinkedPendingSummaries();
+      refreshLinkedPendingSummaries();
       await releaseActiveProjectEditLock();
       document.getElementById('modal-edit-project')?.classList.add('hidden');
       const editProjectDocInput = document.getElementById('edit-project-doc-files');
@@ -36217,7 +36363,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           rubric: 'project-create-upload',
           theme: name || 'General'
         });
-        const createProjectDocumentEvents = createProjectDocuments.map(file => createEvent(
+        const allCreateProjectDocuments = mergeLinkedDocumentsWithUploads(createProjectDocuments, pendingLinkedCreateProjectDocs);
+        const createProjectDocumentEvents = allCreateProjectDocuments.map(file => createEvent(
           EventTypes.CREATE_DOCUMENT,
           projectId,
           currentUser.userId,
@@ -36250,6 +36397,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         document.getElementById('modal-new-project').classList.add('hidden');
         const createProjectDocInput = document.getElementById('project-create-doc-files');
         if (createProjectDocInput) createProjectDocInput.value = '';
+        pendingLinkedCreateProjectDocs = [];
+      refreshLinkedPendingSummaries();
         updateCreateProjectDocFilesSummary();
       const modeText = sharingMode === 'private' ? 'privé' : 'partagé et chiffré E2E';
       showToast(`✅ Projet ${modeText} créé !`);
@@ -37007,9 +37156,16 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     async function readTaskFiles() {
       // Compatibility wrapper: legacy call sites still call this local function.
       if (attachmentsUiRuntime?.readTaskFiles) {
-        return attachmentsUiRuntime.readTaskFiles();
+        const uploaded = await attachmentsUiRuntime.readTaskFiles();
+        const merged = mergeLinkedDocumentsWithUploads(uploaded, pendingLinkedTaskDocs);
+        pendingLinkedTaskDocs = [];
+        refreshLinkedPendingSummaries();
+        return merged;
       }
-      return [];
+      const fallback = mergeLinkedDocumentsWithUploads([], pendingLinkedTaskDocs);
+      pendingLinkedTaskDocs = [];
+      refreshLinkedPendingSummaries();
+      return fallback;
     }
 
     async function readMessageFiles(inputId = 'message-files') {
@@ -37106,6 +37262,173 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         reader.onerror = () => reject(new Error(`Impossible de lire le fichier "${file.name}"`));
         reader.readAsDataURL(file);
       });
+    }
+    let pendingLinkedProjectDocs = [];
+    let pendingLinkedProjectNoteDocs = [];
+    let pendingLinkedGlobalNoteDocs = [];
+    let pendingLinkedTaskDocs = [];
+    let pendingLinkedCreateProjectDocs = [];
+    let pendingLinkedEditProjectDocs = [];
+      refreshLinkedPendingSummaries();
+
+    function mergeLinkedDocumentsWithUploads(uploaded, pendingLinked) {
+      const uploadedDocs = Array.isArray(uploaded) ? uploaded : [];
+      const linkedDocs = Array.isArray(pendingLinked) ? pendingLinked : [];
+      if (!linkedDocs.length) return uploadedDocs;
+      return uploadedDocs.concat(linkedDocs.map((doc) => ({ ...doc, linked: doc?.linked ? { ...doc.linked } : null })));
+    }
+
+    async function getHandlesDb() {
+      return openDB('taskmda-handles', 1, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains('handles')) {
+            db.createObjectStore('handles', { keyPath: 'key' });
+          }
+        }
+      });
+    }
+
+    function withLinkedPendingLabel(baseText, linkedCount) {
+      const normalized = String(baseText || '').replace(/\s*[•·-]\s*\d+\s+fichier\(s\)\s+lié\(s\)\s+en attente\s*$/i, '').trim();
+      const base = normalized || 'Aucun fichier sélectionné';
+      const count = Number(linkedCount || 0);
+      if (count <= 0) return base;
+      return `${base} • ${count} fichier(s) lié(s) en attente`;
+    }
+
+    function refreshLinkedPendingSummaries() {
+      const projectDocSummary = document.getElementById('project-doc-selected-files');
+      if (projectDocSummary) {
+        const count = pendingLinkedProjectDocs.length;
+        projectDocSummary.textContent = withLinkedPendingLabel(projectDocSummary.textContent, count);
+      }
+      const projectCreateSummary = document.getElementById('project-create-doc-files-summary');
+      if (projectCreateSummary) {
+        const count = pendingLinkedCreateProjectDocs.length;
+        projectCreateSummary.textContent = withLinkedPendingLabel(projectCreateSummary.textContent, count);
+      }
+      const projectEditSummary = document.getElementById('edit-project-doc-files-summary');
+      if (projectEditSummary) {
+        const count = pendingLinkedEditProjectDocs.length;
+        projectEditSummary.textContent = withLinkedPendingLabel(projectEditSummary.textContent, count);
+      }
+      const projectNoteSummary = document.getElementById('project-note-attachments-summary');
+      if (projectNoteSummary) {
+        const count = pendingLinkedProjectNoteDocs.length;
+        projectNoteSummary.textContent = withLinkedPendingLabel(projectNoteSummary.textContent, count);
+      }
+      const globalNoteSummary = document.getElementById('global-note-attachments-summary');
+      if (globalNoteSummary) {
+        const count = pendingLinkedGlobalNoteDocs.length;
+        globalNoteSummary.textContent = withLinkedPendingLabel(globalNoteSummary.textContent, count);
+      }
+    }
+
+    async function pickLinkedDocuments(options = {}) {
+      if (typeof window.showOpenFilePicker !== 'function') {
+        showToast('Votre navigateur ne supporte pas la liaison directe de fichiers');
+        return [];
+      }
+      const handles = await window.showOpenFilePicker({ multiple: true });
+      if (!Array.isArray(handles) || handles.length === 0) return [];
+      const scope = String(options.scope || 'global').trim() || 'global';
+      const projectId = String(options.projectId || 'global').trim() || 'global';
+      const rubric = String(options.rubric || 'document-link').trim() || 'document-link';
+      const linkedDocs = [];
+      const db = await getHandlesDb();
+      for (const handle of handles) {
+        if (!handle || handle.kind !== 'file') continue;
+        const file = await handle.getFile();
+        const handleKey = `linked-doc:${Date.now()}:${uuidv4()}`;
+        await db.put('handles', {
+          key: handleKey,
+          handle,
+          kind: 'linked-file',
+          scope,
+          projectId,
+          rubric,
+          updatedAt: Date.now()
+        });
+        linkedDocs.push({
+          name: String(file?.name || 'Document lié').trim() || 'Document lié',
+          type: String(file?.type || 'application/octet-stream').trim() || 'application/octet-stream',
+          size: Number(file?.size || 0) || 0,
+          data: '',
+          storageMode: 'linked-file',
+          storageProvider: 'local-fsa',
+          storagePath: String(file?.name || '').trim(),
+          storedAt: Date.now(),
+          linked: {
+            provider: 'local-fsa',
+            linkMode: 'handle',
+            handleKey,
+            relativePath: String(file?.name || '').trim(),
+            rootAlias: 'manual-file',
+            spaceId: 'local'
+          }
+        });
+      }
+      return linkedDocs;
+    }
+
+    async function resolveLinkedDocumentDataForRuntime(doc = {}) {
+      const linked = doc?.linked && typeof doc.linked === 'object' ? doc.linked : null;
+      const handleKey = String(linked?.handleKey || '').trim();
+      if (!handleKey) return '';
+      const db = await getHandlesDb();
+      const row = await db.get('handles', handleKey);
+      const handle = row?.handle;
+      if (!handle || handle.kind !== 'file') return '';
+      const file = await handle.getFile();
+      return String(await fileToDataUrl(file) || '');
+    }
+
+    async function linkProjectDocuments() {
+      const linkedDocs = await pickLinkedDocuments({ scope: 'project', projectId: currentProjectId || 'global', rubric: 'project-doc-upload' });
+      if (!Array.isArray(linkedDocs) || linkedDocs.length === 0) return;
+      pendingLinkedProjectDocs = pendingLinkedProjectDocs.concat(linkedDocs);
+      refreshLinkedPendingSummaries();
+      showToast(`${linkedDocs.length} fichier(s) lié(s) ajouté(s) à la sélection`);
+    }
+
+    async function linkProjectNoteDocuments() {
+      const linkedDocs = await pickLinkedDocuments({ scope: 'project', projectId: currentProjectId || 'global', rubric: 'project-note-attachment' });
+      if (!Array.isArray(linkedDocs) || linkedDocs.length === 0) return;
+      pendingLinkedProjectNoteDocs = pendingLinkedProjectNoteDocs.concat(linkedDocs);
+      refreshLinkedPendingSummaries();
+      showToast(`${linkedDocs.length} fichier(s) lié(s) ajouté(s) à la note`);
+    }
+
+    async function linkGlobalNoteDocuments() {
+      const linkedDocs = await pickLinkedDocuments({ scope: 'global', projectId: 'global', rubric: 'global-note-attachment' });
+      if (!Array.isArray(linkedDocs) || linkedDocs.length === 0) return;
+      pendingLinkedGlobalNoteDocs = pendingLinkedGlobalNoteDocs.concat(linkedDocs);
+      refreshLinkedPendingSummaries();
+      showToast(`${linkedDocs.length} fichier(s) lié(s) ajouté(s) à la note`);
+    }
+
+    async function linkTaskDocuments() {
+      const linkedDocs = await pickLinkedDocuments({ scope: 'project', projectId: currentProjectId || 'global', rubric: 'task-attachment' });
+      if (!Array.isArray(linkedDocs) || linkedDocs.length === 0) return;
+      pendingLinkedTaskDocs = pendingLinkedTaskDocs.concat(linkedDocs);
+      refreshLinkedPendingSummaries();
+      showToast(`${linkedDocs.length} fichier(s) lié(s) ajouté(s) à la tâche`);
+    }
+
+    async function linkCreateProjectDocuments() {
+      const linkedDocs = await pickLinkedDocuments({ scope: 'project', projectId: 'pending-project', rubric: 'project-create-upload' });
+      if (!Array.isArray(linkedDocs) || linkedDocs.length === 0) return;
+      pendingLinkedCreateProjectDocs = pendingLinkedCreateProjectDocs.concat(linkedDocs);
+      refreshLinkedPendingSummaries();
+      showToast(`${linkedDocs.length} fichier(s) lié(s) ajouté(s) au projet`);
+    }
+
+    async function linkEditProjectDocuments() {
+      const linkedDocs = await pickLinkedDocuments({ scope: 'project', projectId: currentProjectId || 'global', rubric: 'project-edit-upload' });
+      if (!Array.isArray(linkedDocs) || linkedDocs.length === 0) return;
+      pendingLinkedEditProjectDocs = pendingLinkedEditProjectDocs.concat(linkedDocs);
+      refreshLinkedPendingSummaries();
+      showToast(`${linkedDocs.length} fichier(s) lié(s) ajouté(s) au projet`);
     }
 
     function insertTextAtCursor(input, text) {
@@ -37663,3 +37986,4 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         });
       });
     }
+

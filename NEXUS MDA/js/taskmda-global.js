@@ -499,6 +499,7 @@
     const actions = opts.actions || {};
     const helpers = opts.helpers || {};
     let bound = false;
+    let pendingLinkedStandaloneDocs = [];
 
     function resetDocumentBindingInlineEditingState() {
       const debounceTimers = state.getDocBindingInlineDebounceTimers?.();
@@ -1082,7 +1083,7 @@
       const files = Array.from(filesInput?.files || []);
       const theme = themeInput?.value?.trim() || 'General';
       const sharingMode = modeInput?.value || 'private';
-      if (files.length === 0) {
+      if (files.length === 0 && pendingLinkedStandaloneDocs.length === 0) {
         helpers.showToast?.('Sélectionnez au moins un document');
         return;
       }
@@ -1095,8 +1096,12 @@
           rubric: 'global-doc-upload',
           theme
         });
-        if (!Array.isArray(docs) || docs.length === 0) return;
-        for (const file of (docs || [])) {
+        const allDocsToInsert = [
+          ...(Array.isArray(docs) ? docs : []),
+          ...pendingLinkedStandaloneDocs
+        ];
+        if (allDocsToInsert.length === 0) return;
+        for (const file of allDocsToInsert) {
           await actions.putEncrypted?.('globalDocs', {
             id: helpers.uuidv4?.(),
             name: file.name,
@@ -1106,6 +1111,7 @@
             storageMode: file.storageMode || '',
             storageProvider: file.storageProvider || '',
             storagePath: file.storagePath || '',
+            linked: file.linked && typeof file.linked === 'object' ? { ...file.linked } : null,
             storedAt: Number(file.storedAt || 0) || null,
             theme,
             sharingMode: helpers.normalizeSharingMode?.(sharingMode, 'private') || 'private',
@@ -1115,6 +1121,7 @@
         }
 
         if (filesInput) filesInput.value = '';
+        pendingLinkedStandaloneDocs = [];
         if (themeInput) themeInput.value = '';
         if (modeInput) modeInput.value = 'private';
         const label = document.getElementById('global-doc-files-label');
@@ -1128,6 +1135,21 @@
       actions.addNotification?.('Documents', `${insertedCount} document(s) hors projet ajouté(s)`, null);
       closeGlobalDocUploadModal();
       await actions.renderGlobalDocs?.();
+    }
+
+    async function linkStandaloneDocuments() {
+      const label = document.getElementById('global-doc-files-label');
+      const linkedDocs = await actions.pickLinkedDocuments?.({
+        scope: 'global',
+        projectId: 'global',
+        rubric: 'global-doc-link'
+      });
+      if (!Array.isArray(linkedDocs) || linkedDocs.length === 0) return;
+      pendingLinkedStandaloneDocs = pendingLinkedStandaloneDocs.concat(linkedDocs);
+      if (label) {
+        label.textContent = `${pendingLinkedStandaloneDocs.length} fichier(s) lié(s) prêt(s)`;
+      }
+      helpers.showToast?.(`${linkedDocs.length} fichier(s) lié(s) ajouté(s) à la sélection`);
     }
 
     function openGlobalDocUploadModal() {
@@ -1330,12 +1352,16 @@
       document.getElementById('doc-binding-theme-known')?.addEventListener('change', () => {
         actions.syncThemePickerInputFromSelection?.('doc-binding-theme-known', 'doc-binding-theme');
       });
+      document.getElementById('btn-global-doc-link')?.addEventListener('click', async () => {
+        await linkStandaloneDocuments();
+      });
     }
 
     return {
       bindDom,
       renderGlobalDocs,
       addStandaloneDocuments,
+      linkStandaloneDocuments,
       deleteGlobalDocument,
       resolveDocumentForBinding,
       openGlobalDocUploadModal,
@@ -1807,6 +1833,35 @@
       });
       let noteCardHtml = String(tempHost.innerHTML || '').trim();
       if (!noteCardHtml) return '';
+      const prominentTitle = String(refLabel || post?.title || '').trim() || 'Note sans titre';
+      // In feed cards, enforce title-first hierarchy and downgrade author/date to metadata.
+      try {
+        const cardHost = document.createElement('div');
+        cardHost.innerHTML = noteCardHtml;
+        const cardArticle = cardHost.querySelector('article');
+        if (cardArticle) {
+          cardArticle.querySelector('.discussion-avatar')?.remove();
+          const mainContainer = cardArticle.querySelector('.min-w-0') || cardArticle.querySelector('.feed-item-body') || cardArticle;
+          const firstTitle = mainContainer.querySelector('h1, h2, h3, h4');
+          if (firstTitle) {
+            firstTitle.remove();
+          }
+          const titleNode = document.createElement('h4');
+          titleNode.className = 'text-lg font-bold text-slate-900 mb-1';
+          titleNode.textContent = prominentTitle;
+          mainContainer.insertBefore(titleNode, mainContainer.firstChild);
+
+          const authorNode = cardArticle.querySelector('p.text-sm.font-semibold.text-slate-800');
+          if (authorNode) {
+            authorNode.className = 'text-xs font-medium text-slate-500';
+          }
+          const dateNode = cardArticle.querySelector('p.text-xs.text-slate-500');
+          if (dateNode) {
+            dateNode.className = 'text-[11px] text-slate-400';
+          }
+        }
+        noteCardHtml = cardHost.innerHTML;
+      } catch (_) {}
       if (refType === 'project-note') {
         const encoded = encodeURIComponent(refId);
         noteCardHtml = noteCardHtml
@@ -1872,14 +1927,14 @@
         }
         const identity = actions.resolveKnownUserIdentity?.(post.authorUserId || '', post.authorName || actions.fallbackDirectoryName?.(post.authorUserId || '')) || {};
         const avatarStyle = actions.safeAvatarInlineStyle?.(identity.avatarDataUrl, actions.stringToColor?.(post.authorUserId || post.authorName || '')) || '';
+        const displayTitle = String(post.title || '').trim() || 'Sans titre';
         cardsHtml.push(`
           <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''} cursor-pointer" onclick="toggleCollapsibleContent(this.querySelector('.collapsible-toggle'))">
             <div class="feed-item-head">
               <div class="feed-item-meta">
-                <span class="discussion-avatar" style="${avatarStyle}">${helpers.escapeHtml?.(actions.getInitials?.(post.authorName || 'U'))}</span>
                 <div>
-                  <p class="text-sm font-semibold text-slate-800">${helpers.escapeHtml?.(post.authorName || actions.fallbackDirectoryName?.(post.authorUserId || ''))}</p>
-                  <p class="text-xs text-slate-500">${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
+                  <p class="text-lg font-bold text-slate-900 leading-tight">${helpers.escapeHtml?.(displayTitle)}</p>
+                  <p class="text-xs text-slate-500">${helpers.escapeHtml?.(post.authorName || actions.fallbackDirectoryName?.(post.authorUserId || ''))} • ${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -1905,7 +1960,6 @@
               </div>
             </div>
             <div class="feed-item-body">
-              ${String(post.title || '').trim() ? `<h4 class="text-base font-semibold text-slate-800 mb-2">${helpers.escapeHtml?.(String(post.title || '').trim())}</h4>` : ''}
               <div class="collapsible-wrapper">
                 <div class="collapsible-content is-collapsed">
                   <div class="ql-snow"><div class="ql-editor p-0 text-sm text-slate-600 markdown-content" style="min-height: auto; overflow-y: hidden; cursor: inherit;">

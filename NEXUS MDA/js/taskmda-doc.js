@@ -41,6 +41,16 @@
 
     async function resolveDocumentDataForRuntime(doc) {
       if (String(doc?.data || '').trim()) return String(doc.data || '');
+      if (String(doc?.storageMode || '').trim() === 'linked-file') {
+        if (typeof opts.resolveLinkedDocumentDataForRuntime !== 'function') return '';
+        try {
+          const linkedData = await opts.resolveLinkedDocumentDataForRuntime(doc);
+          return String(linkedData || '');
+        } catch (error) {
+          console.warn('Unable to load linked document data:', error);
+          return '';
+        }
+      }
       if (!canUseSharedFilesystemDocumentStorage()) return '';
       if (String(doc?.storageMode || '').trim() !== 'fs') return '';
       const storagePath = String(doc?.storagePath || '').trim();
