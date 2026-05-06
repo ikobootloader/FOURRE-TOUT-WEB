@@ -24,6 +24,21 @@
       return Boolean(getSharedFolderHandle() && global.TaskMDADocumentStorage?.isAvailable?.());
     }
 
+    const DOCUMENT_UPLOAD_POLICY = Object.freeze({
+      // Requirement: no size limit at import time.
+      enforceSizeLimit: false
+    });
+
+    function normalizeDocumentUploadFile(file) {
+      if (!file) return null;
+      return {
+        name: String(file.name || '').trim() || `document-${Date.now()}.bin`,
+        type: String(file.type || 'application/octet-stream').trim() || 'application/octet-stream',
+        size: Number(file.size || 0) || 0,
+        raw: file
+      };
+    }
+
     async function resolveDocumentDataForRuntime(doc) {
       if (String(doc?.data || '').trim()) return String(doc.data || '');
       if (!canUseSharedFilesystemDocumentStorage()) return '';
@@ -126,43 +141,44 @@
       if (!files.length) return [];
       const safeOptions = options && typeof options === 'object' ? options : {};
       const useFsStorage = canUseSharedFilesystemDocumentStorage();
+      if (!useFsStorage) {
+        opts.showToast?.('Versement indisponible: liez un dossier partagé pour stocker les documents (sans base64 en base).');
+        return [];
+      }
       const fileScope = String(safeOptions.scope || 'project').trim() || 'project';
       const fileProjectId = String(safeOptions.projectId || getCurrentProjectId() || 'global').trim() || 'global';
       const fileTheme = String(safeOptions.theme || 'General').trim() || 'General';
       const fileRubric = String(safeOptions.rubric || 'document-upload').trim() || 'document-upload';
-      return Promise.all(files.map(async (file) => {
+      const docs = [];
+      for (const file of files) {
+        const normalized = normalizeDocumentUploadFile(file);
+        if (!normalized) continue;
         const baseDoc = {
           docId: opts.uuidv4?.() || String(Date.now()),
-          name: file.name,
-          type: file.type || 'application/octet-stream',
-          size: file.size,
+          name: normalized.name,
+          type: normalized.type,
+          size: normalized.size,
           uploadedAt: Date.now()
         };
-        if (useFsStorage) {
-          try {
-            const fsMeta = await global.TaskMDADocumentStorage.writeFile(getSharedFolderHandle(), file, {
-              rubric: fileRubric,
-              scope: fileScope,
-              projectId: fileProjectId,
-              theme: fileTheme
-            });
-            return {
-              ...baseDoc,
-              data: '',
-              storageMode: fsMeta.storageMode,
-              storageProvider: fsMeta.storageProvider,
-              storagePath: fsMeta.storagePath,
-              storedAt: fsMeta.storedAt
-            };
-          } catch (error) {
-            console.warn('Falling back to IndexedDB payload storage for document:', error);
-          }
+        if (DOCUMENT_UPLOAD_POLICY.enforceSizeLimit) {
+          // Intentionally unused for now (no import size cap).
         }
-        const data = global.TaskMDADocumentStorage?.readFileAsDataUrl
-          ? await global.TaskMDADocumentStorage.readFileAsDataUrl(file)
-          : await opts.fileToDataUrl?.(file);
-        return { ...baseDoc, data };
-      }));
+        const fsMeta = await global.TaskMDADocumentStorage.writeFile(getSharedFolderHandle(), normalized.raw, {
+          rubric: fileRubric,
+          scope: fileScope,
+          projectId: fileProjectId,
+          theme: fileTheme
+        });
+        docs.push({
+          ...baseDoc,
+          data: '',
+          storageMode: fsMeta.storageMode,
+          storageProvider: fsMeta.storageProvider,
+          storagePath: fsMeta.storagePath,
+          storedAt: fsMeta.storedAt
+        });
+      }
+      return docs;
     }
 
     async function readProjectDocumentFiles(options) {
@@ -849,4 +865,3 @@
 
   global.TaskMDADocPreviewModalUI = { createModule };
 })(window);
-

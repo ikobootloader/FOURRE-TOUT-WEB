@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // TASKMDA FILE WATCHER - Surveillance de fichiers avec polling
 // ============================================================================
 // Module autonome pour observer les modifications de fichiers dans des dossiers
@@ -8,12 +8,12 @@
 (function(window) {
   'use strict';
 
-  // Configuration par défaut
+  // Configuration par d�faut
   const DEFAULT_POLL_INTERVAL = 60000; // 1 minute
   const MIN_POLL_INTERVAL = 30000; // 30 secondes minimum
   const MAX_POLL_INTERVAL = 3600000; // 1 heure maximum
 
-  // Patterns de fichiers supportés par catégorie
+  // Patterns de fichiers support�s par cat�gorie
   const FILE_PATTERNS = {
     excel: ['*.xlsx', '*.xls', '*.xlsm', '*.xlsb'],
     word: ['*.docx', '*.doc', '*.docm'],
@@ -24,7 +24,7 @@
     all: ['*.*']
   };
 
-  // État global
+  // �tat global
   let pollTimers = new Map(); // watcherId -> intervalId
   let isPollingActive = false;
 
@@ -51,7 +51,7 @@
   }
 
   /**
-   * Vérifie si un nom de fichier correspond aux patterns
+   * V�rifie si un nom de fichier correspond aux patterns
    */
   function matchesPatterns(fileName, patterns) {
     if (!patterns || patterns.length === 0) return true;
@@ -62,15 +62,15 @@
   }
 
   /**
-   * Calcule un hash simple basé sur lastModified + size
-   * (suffisant pour détecter les modifications)
+   * Calcule un hash simple bas� sur lastModified + size
+   * (suffisant pour d�tecter les modifications)
    */
   function computeFileHash(lastModified, size) {
     return `${lastModified}-${size}`;
   }
 
   /**
-   * Récupère tous les fichiers d'un dossier (récursif optionnel)
+   * R�cup�re tous les fichiers d'un dossier (r�cursif optionnel)
    */
   async function scanDirectory(dirHandle, recursive = false, basePath = '') {
     const files = [];
@@ -123,7 +123,7 @@
     const index = store.index('watcherId');
     const snapshots = await index.getAll(watcherId);
 
-    // Convertir en Map pour accès rapide
+    // Convertir en Map pour acc�s rapide
     const snapshotMap = new Map();
     snapshots.forEach(snap => {
       snapshotMap.set(snap.filePath, snap);
@@ -133,7 +133,7 @@
   }
 
   /**
-   * Met à jour ou crée un snapshot
+   * Met � jour ou cr�e un snapshot
    */
   async function updateSnapshot(watcherId, fileData) {
     const db = await getDatabase();
@@ -154,7 +154,7 @@
   }
 
   /**
-   * Marque les snapshots comme supprimés
+   * Marque les snapshots comme supprim�s
    */
   async function markSnapshotsAsDeleted(watcherId, pathsToDelete) {
     if (pathsToDelete.length === 0) return;
@@ -177,18 +177,18 @@
   }
 
   // ============================================================================
-  // DÉTECTION DES CHANGEMENTS
+  // D�TECTION DES CHANGEMENTS
   // ============================================================================
 
   /**
-   * Compare les fichiers actuels avec les snapshots et détecte les changements
+   * Compare les fichiers actuels avec les snapshots et d�tecte les changements
    */
   async function detectChanges(watcherId, currentFiles, snapshots) {
     const events = [];
     const now = Date.now();
     const currentPaths = new Set();
 
-    // Vérifier les fichiers actuels (nouveaux ou modifiés)
+    // V�rifier les fichiers actuels (nouveaux ou modifi�s)
     for (const fileData of currentFiles) {
       currentPaths.add(fileData.path);
       const snapshot = snapshots.get(fileData.path);
@@ -208,7 +208,7 @@
           newModified: fileData.lastModified
         });
       } else if (snapshot.hash !== currentHash) {
-        // Fichier modifié
+        // Fichier modifi�
         events.push({
           id: uuidv4(),
           watcherId,
@@ -225,7 +225,7 @@
       }
     }
 
-    // Vérifier les fichiers supprimés
+    // V�rifier les fichiers supprim�s
     for (const [path, snapshot] of snapshots.entries()) {
       if (snapshot.status === 'active' && !currentPaths.has(path)) {
         events.push({
@@ -246,7 +246,7 @@
   }
 
   /**
-   * Enregistre les événements détectés
+   * Enregistre les �v�nements d�tect�s
    */
   async function saveEvents(events) {
     if (events.length === 0) return;
@@ -267,23 +267,23 @@
   // ============================================================================
 
   /**
-   * Crée une notification pour un événement de fichier
+   * Cr�e une notification pour un �v�nement de fichier
    * Injecte dans le panneau Notifications (cloche) via le bridge CustomEvent
    */
   function createNotificationForEvent(watcher, event) {
     const labels = {
-      created: 'Nouveau fichier détecté',
-      modified: 'Fichier modifié',
-      deleted: 'Fichier supprimé'
+      created: 'Nouveau fichier d�tect�',
+      modified: 'Fichier modifi�',
+      deleted: 'Fichier supprim�'
     };
     const icons = {
-      created: '📄',
-      modified: '✏️',
-      deleted: '🗑️'
+      created: '??',
+      modified: '??',
+      deleted: '???'
     };
 
-    const title = `${icons[event.eventType] || '📁'} ${labels[event.eventType] || 'Changement fichier'}`;
-    const body = `${event.fileName} — Observateur : ${watcher.name}`;
+    const title = `${icons[event.eventType] || '??'} ${labels[event.eventType] || 'Changement fichier'}`;
+    const body = `${event.fileName} � Observateur : ${watcher.name}`;
 
     // Injection dans le panneau Notifications (cloche) via le bridge
     window.dispatchEvent(new CustomEvent('taskmda:inject-notification', {
@@ -304,7 +304,7 @@
       }
     }));
 
-    // Marquer l'événement comme notifié en DB
+    // Marquer l'�v�nement comme notifi� en DB
     (async () => {
       try {
         const db = await getDatabase();
@@ -320,13 +320,13 @@
   }
 
   /**
-   * Affiche un toast visuel temps réel pour un événement fichier
+   * Affiche un toast visuel temps r�el pour un �v�nement fichier
    */
   function showRealtimeToastForEvent(watcher, event) {
     const labels = {
-      created: '📄 Nouveau fichier',
-      modified: '✏️ Fichier modifié',
-      deleted: '🗑️ Fichier supprimé'
+      created: '?? Nouveau fichier',
+      modified: '?? Fichier modifi�',
+      deleted: '??? Fichier supprim�'
     };
     const msg = `${labels[event.eventType] || 'Changement'} : ${event.fileName}`;
     if (typeof showToast === 'function') {
@@ -335,11 +335,11 @@
   }
 
   // ============================================================================
-  // CYCLE DE VÉRIFICATION (POLLING)
+  // CYCLE DE V�RIFICATION (POLLING)
   // ============================================================================
 
   /**
-   * Effectue une vérification complète d'un observateur
+   * Effectue une v�rification compl�te d'un observateur
    */
   async function checkWatcher(watcherId) {
     try {
@@ -351,13 +351,13 @@
         return;
       }
 
-      // Vérifier les permissions du dossier
+      // V�rifier les permissions du dossier
       if (!watcher.folderHandle) {
         console.warn(`Watcher ${watcherId}: no folder handle`);
         return;
       }
 
-      // Demander la permission si nécessaire
+      // Demander la permission si n�cessaire
       try {
         const permission = await watcher.folderHandle.queryPermission({ mode: 'read' });
         if (permission !== 'granted') {
@@ -389,16 +389,16 @@
       // Charger les snapshots
       const snapshots = await loadSnapshots(watcherId);
 
-      // Détecter les changements
+      // D�tecter les changements
       const events = await detectChanges(watcherId, filteredFiles, snapshots);
 
       debugLog(`Detected ${events.length} changes`);
 
-      // Sauvegarder les événements
+      // Sauvegarder les �v�nements
       if (events.length > 0) {
         await saveEvents(events);
 
-        // Créer les notifications
+        // Cr�er les notifications
         const shouldNotify = {
           created: watcher.notifyOnCreate !== false,
           modified: watcher.notifyOnModify !== false,
@@ -409,7 +409,7 @@
           if (shouldNotify[event.eventType]) {
             await createNotificationForEvent(watcher, event);
 
-            // Notification navigateur temps réel
+            // Notification navigateur temps r�el
             if (watcher.realtimeNotify) {
               showRealtimeToastForEvent(watcher, event);
             }
@@ -417,18 +417,18 @@
         }
       }
 
-      // Mettre à jour les snapshots
+      // Mettre � jour les snapshots
       for (const fileData of filteredFiles) {
         await updateSnapshot(watcherId, fileData);
       }
 
-      // Marquer les fichiers supprimés
+      // Marquer les fichiers supprim�s
       const deletedPaths = events
         .filter(e => e.eventType === 'deleted')
         .map(e => e.filePath);
       await markSnapshotsAsDeleted(watcherId, deletedPaths);
 
-      // Mettre à jour la date de dernière vérification et l'historique
+      // Mettre � jour la date de derni�re v�rification et l'historique
       watcher.lastCheckAt = Date.now();
       watcher.checkHistory = watcher.checkHistory || [];
       watcher.checkHistory.unshift(watcher.lastCheckAt);
@@ -447,12 +447,12 @@
   }
 
   /**
-   * Démarre le polling pour un observateur
+   * D�marre le polling pour un observateur
    */
   function startPolling(watcher) {
     if (!watcher.enabled) return;
 
-    // Arrêter le polling existant si présent
+    // Arr�ter le polling existant si pr�sent
     stopPolling(watcher.id);
 
     const interval = Math.max(
@@ -462,10 +462,10 @@
 
     debugLog(`Starting polling for watcher ${watcher.id} (interval: ${interval}ms)`);
 
-    // Première vérification immédiate
+    // Premi�re v�rification imm�diate
     checkWatcher(watcher.id);
 
-    // Puis polling régulier
+    // Puis polling r�gulier
     const timerId = setInterval(() => {
       checkWatcher(watcher.id);
     }, interval);
@@ -474,7 +474,7 @@
   }
 
   /**
-   * Arrête le polling pour un observateur
+   * Arr�te le polling pour un observateur
    */
   function stopPolling(watcherId) {
     if (pollTimers.has(watcherId)) {
@@ -485,12 +485,12 @@
   }
 
   /**
-   * Démarre tous les observateurs actifs
+   * D�marre tous les observateurs actifs
    */
   async function startAllWatchers() {
     if (isPollingActive) return;
 
-    // Vérifier que la DB est disponible
+    // V�rifier que la DB est disponible
     if (typeof getDatabase !== 'function') {
       debugLog('Database function not yet available, retrying in 2s...');
       setTimeout(() => startAllWatchers(), 2000);
@@ -500,7 +500,7 @@
     try {
       const db = await getDatabase();
 
-      // Vérifier que le store existe
+      // V�rifier que le store existe
       if (!db.objectStoreNames.contains('fileWatchers')) {
         debugLog('fileWatchers store not yet available, retrying in 2s...');
         setTimeout(() => startAllWatchers(), 2000);
@@ -519,13 +519,13 @@
       isPollingActive = true;
       debugLog(`Started ${pollTimers.size} file watchers`);
     } catch (error) {
-      // Si la DB n'est pas encore initialisée, réessayer
+      // Si la DB n'est pas encore initialis�e, r�essayer
       if (error.message && error.message.includes('not initialized')) {
         debugLog('Database not yet initialized, retrying in 2s...');
         setTimeout(() => startAllWatchers(), 2000);
       } else {
         console.error('Error starting file watchers:', error);
-        // Réessayer après 2s pour les autres erreurs aussi
+        // R�essayer apr�s 2s pour les autres erreurs aussi
         if (!isPollingActive) {
           setTimeout(() => startAllWatchers(), 2000);
         }
@@ -534,7 +534,7 @@
   }
 
   /**
-   * Arrête tous les observateurs
+   * Arr�te tous les observateurs
    */
   function stopAllWatchers() {
     for (const watcherId of pollTimers.keys()) {
@@ -565,16 +565,16 @@
     loadSnapshots,
     updateSnapshot,
 
-    // Événements
+    // �v�nements
     detectChanges,
     saveEvents,
 
-    // État
+    // �tat
     isActive: () => isPollingActive,
     getActiveWatchers: () => Array.from(pollTimers.keys())
   };
 
-  // Démarrer automatiquement au chargement (avec délai pour attendre l'init de la DB)
+  // D�marrer automatiquement au chargement (avec d�lai pour attendre l'init de la DB)
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => startAllWatchers(), 5000);
@@ -583,7 +583,7 @@
     setTimeout(() => startAllWatchers(), 5000);
   }
 
-  // Arrêter proprement avant déchargement de la page
+  // Arr�ter proprement avant d�chargement de la page
   window.addEventListener('beforeunload', () => {
     stopAllWatchers();
   });
@@ -656,7 +656,7 @@
       }
     });
 
-    // Ajouter les patterns personnalisÃ©s
+    // Ajouter les patterns personnalisés
     const customInput = document.getElementById('file-watcher-custom-patterns');
     if (customInput && customInput.value.trim()) {
       const customPatterns = customInput.value.split(',').map(p => p.trim()).filter(Boolean);
@@ -667,7 +667,7 @@
   }
 
   function setSelectedPatterns(patterns) {
-    // DÃ©cocher tous
+    // Décocher tous
     document.querySelectorAll('.file-pattern-check').forEach(check => {
       check.checked = false;
     });
@@ -691,7 +691,7 @@
       }
     });
 
-    // Patterns personnalisÃ©s
+    // Patterns personnalisés
     const customInput = document.getElementById('file-watcher-custom-patterns');
     if (customInput) {
       customInput.value = customPatterns.join(', ');
@@ -734,14 +734,14 @@
               </div>
             </div>
             <span class="text-xs px-2 py-1 rounded-full ${watcher.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
-              ${watcher.enabled ? 'Actif' : 'PausÃ©'}
+              ${watcher.enabled ? 'Actif' : 'Pausé'}
             </span>
           </div>
           <div class="text-xs text-slate-600 space-y-1">
             <div class="flex flex-col gap-0.5">
               <div class="flex items-center gap-1 font-semibold mb-0.5">
                 <span class="material-symbols-outlined text-sm">schedule</span>
-                <span>DerniÃ¨res vÃ©rifications:</span>
+                <span>Dernières vérifications:</span>
               </div>
               ${(watcher.checkHistory || [watcher.lastCheckAt]).filter(Boolean).slice(0, 3).map(ts => `
                 <div class="flex items-center gap-1 pl-5 text-[10px] text-slate-500">
@@ -749,7 +749,7 @@
                   <span>${formatDate(ts)}</span>
                 </div>
               `).join('')}
-              ${!(watcher.checkHistory?.length) && !watcher.lastCheckAt ? '<span class="pl-5 text-slate-400 italic">Aucune vÃ©rification</span>' : ''}
+              ${!(watcher.checkHistory?.length) && !watcher.lastCheckAt ? '<span class="pl-5 text-slate-400 italic">Aucune vérification</span>' : ''}
             </div>
             <div class="flex items-center gap-1 pt-1 border-t border-slate-100 mt-1">
               <span class="material-symbols-outlined text-sm">filter_alt</span>
@@ -759,7 +759,7 @@
         </div>
       `).join('');
 
-      // Ã‰vÃ©nements clic
+      // Événements clic
       listContainer.querySelectorAll('[data-watcher-id]').forEach(card => {
         card.addEventListener('click', () => {
           const watcherId = card.dataset.watcherId;
@@ -773,7 +773,7 @@
   }
 
   // ============================================================================
-  // CRÃ‰ATION/Ã‰DITION
+  // CRÉATION/ÉDITION
   // ============================================================================
 
   function openCreateWatcherModal() {
@@ -786,17 +786,17 @@
 
     if (!modal || !title || !form) return;
 
-    title.textContent = 'CrÃ©er un observateur';
+    title.textContent = 'Créer un observateur';
     form.reset();
     document.getElementById('file-watcher-edit-id').value = '';
     document.getElementById('file-watcher-folder-name').value = '';
 
-    // Patterns par dÃ©faut
+    // Patterns par défaut
     document.querySelectorAll('.file-pattern-check').forEach(check => {
       check.checked = ['excel', 'word', 'pdf', 'csv'].includes(check.value);
     });
 
-    // RÃ©initialiser l'option notification temps rÃ©el
+    // Réinitialiser l'option notification temps réel
     const realtimeCheck = document.getElementById('file-watcher-realtime-notify');
     if (realtimeCheck) realtimeCheck.checked = false;
 
@@ -831,7 +831,7 @@
 
       document.getElementById('file-watcher-edit-id').value = watcher.id;
       document.getElementById('file-watcher-name').value = watcher.name || '';
-      document.getElementById('file-watcher-folder-name').value = watcher.folderHandle?.name || 'Dossier sÃ©lectionnÃ©';
+      document.getElementById('file-watcher-folder-name').value = watcher.folderHandle?.name || 'Dossier sélectionné';
       document.getElementById('file-watcher-poll-interval').value = watcher.pollInterval || 60000;
       document.getElementById('file-watcher-recursive').checked = watcher.recursive || false;
       document.getElementById('file-watcher-notify-create').checked = watcher.notifyOnCreate !== false;
@@ -854,7 +854,7 @@
   async function saveFileWatcher(formData) {
     try {
       if (!currentFolderHandle) {
-        showToast('Veuillez sÃ©lectionner un dossier', 'error');
+        showToast('Veuillez sélectionner un dossier', 'error');
         return;
       }
 
@@ -879,7 +879,7 @@
         updatedAt: Date.now()
       };
 
-      // Merge avec l'existant si Ã©dition
+      // Merge avec l'existant si édition
       if (!isNew) {
         const existing = await db.get('fileWatchers', watcherId);
         Object.assign(watcher, existing, watcher);
@@ -887,12 +887,12 @@
 
       await db.put('fileWatchers', watcher);
 
-      // DÃ©marrer le polling
+      // Démarrer le polling
       if (window.TaskMdaFileWatcher) {
         window.TaskMdaFileWatcher.startPolling(watcher);
       }
 
-      showToast(isNew ? 'Observateur crÃ©Ã© avec succÃ¨s' : 'Observateur mis Ã  jour', 'success');
+      showToast(isNew ? 'Observateur créé avec succès' : 'Observateur mis à jour', 'success');
       closeFileWatcherEditModal();
       await renderFileWatchersList();
 
@@ -910,7 +910,7 @@
   }
 
   // ============================================================================
-  // DÃ‰TAIL
+  // DÉTAIL
   // ============================================================================
 
   async function openWatcherDetail(watcherId) {
@@ -939,7 +939,7 @@
       title.textContent = watcher.name;
 
       // Informations
-      document.getElementById('file-watcher-detail-status').textContent = watcher.enabled ? 'Actif' : 'PausÃ©';
+      document.getElementById('file-watcher-detail-status').textContent = watcher.enabled ? 'Actif' : 'Pausé';
       document.getElementById('file-watcher-detail-status').className = watcher.enabled ? 'text-emerald-600' : 'text-slate-500';
       document.getElementById('file-watcher-detail-interval').textContent = formatInterval(watcher.pollInterval || 60000);
       document.getElementById('file-watcher-detail-recursive').textContent = watcher.recursive ? 'Oui' : 'Non';
@@ -947,7 +947,7 @@
 
       const realtimeEl = document.getElementById('file-watcher-detail-realtime');
       if (realtimeEl) {
-        realtimeEl.textContent = watcher.realtimeNotify ? 'ActivÃ©' : 'DÃ©sactivÃ©';
+        realtimeEl.textContent = watcher.realtimeNotify ? 'Activé' : 'Désactivé';
         realtimeEl.className = watcher.realtimeNotify ? 'font-semibold text-emerald-600' : 'text-slate-500';
       }
 
@@ -959,7 +959,7 @@
         toggleLabel.textContent = watcher.enabled ? 'Mettre en pause' : 'Reprendre';
       }
 
-      // Charger les fichiers et Ã©vÃ©nements
+      // Charger les fichiers et événements
       await loadWatcherFiles(watcherId);
       await loadWatcherEvents(watcherId);
 
@@ -993,7 +993,7 @@
       if (!list) return;
 
       if (activeSnapshots.length === 0) {
-        list.innerHTML = '<p class="text-sm text-slate-500 p-3">Aucun fichier dÃ©tectÃ©</p>';
+        list.innerHTML = '<p class="text-sm text-slate-500 p-3">Aucun fichier détecté</p>';
         return;
       }
 
@@ -1032,7 +1032,7 @@
         events = events.filter(e => e.eventType === filter);
       }
 
-      // Trier par date dÃ©croissante
+      // Trier par date décroissante
       events.sort((a, b) => b.detectedAt - a.detectedAt);
 
       const count = document.getElementById('file-watcher-events-count');
@@ -1043,28 +1043,28 @@
       if (!list) return;
 
       if (events.length === 0) {
-        list.innerHTML = '<p class="text-sm text-slate-500 p-3">Aucun changement dÃ©tectÃ©</p>';
+        list.innerHTML = '<p class="text-sm text-slate-500 p-3">Aucun changement détecté</p>';
         return;
       }
 
       const icons = {
-        created: 'ðŸ“„',
-        modified: 'âœï¸',
-        deleted: 'ðŸ—‘ï¸'
+        created: '📄',
+        modified: '✏️',
+        deleted: '🗑️'
       };
 
       const labels = {
-        created: 'CrÃ©Ã©',
-        modified: 'ModifiÃ©',
-        deleted: 'SupprimÃ©'
+        created: 'Créé',
+        modified: 'Modifié',
+        deleted: 'Supprimé'
       };
 
       list.innerHTML = events.map(event => `
         <div class="flex items-start gap-2 p-2 border-b border-slate-100">
-          <span class="text-lg">${icons[event.eventType] || 'ðŸ“'}</span>
+          <span class="text-lg">${icons[event.eventType] || '📁'}</span>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(event.fileName)}</div>
-            <div class="text-xs text-slate-500">${labels[event.eventType]} â€¢ ${formatDate(event.detectedAt)}</div>
+            <div class="text-xs text-slate-500">${labels[event.eventType]} • ${formatDate(event.detectedAt)}</div>
           </div>
         </div>
       `).join('');
@@ -1098,9 +1098,9 @@
         window.TaskMdaFileWatcher.stopPolling(watcherId);
       }
 
-      showToast(watcher.enabled ? 'Observateur activÃ©' : 'Observateur mis en pause', 'success');
+      showToast(watcher.enabled ? 'Observateur activé' : 'Observateur mis en pause', 'success');
 
-      // RafraÃ®chir
+      // Rafraîchir
       await openWatcherDetail(watcherId);
       await renderFileWatchersList();
 
@@ -1118,19 +1118,19 @@
 
     if (!window.TaskMdaFileWatcher) return;
 
-    showToast('VÃ©rification en cours...', 'info');
+    showToast('Vérification en cours...', 'info');
 
     try {
       await window.TaskMdaFileWatcher.checkWatcher(watcherId);
-      showToast('VÃ©rification terminÃ©e', 'success');
+      showToast('Vérification terminée', 'success');
 
-      // RafraÃ®chir les donnÃ©es
+      // Rafraîchir les données
       await loadWatcherFiles(watcherId);
       await loadWatcherEvents(watcherId);
 
     } catch (error) {
       console.error('Error checking watcher:', error);
-      showToast('Erreur lors de la vÃ©rification', 'error');
+      showToast('Erreur lors de la vérification', 'error');
     }
   }
 
@@ -1146,7 +1146,7 @@
     try {
       const db = await getDatabase();
 
-      // ArrÃªter le polling
+      // Arrêter le polling
       if (window.TaskMdaFileWatcher) {
         window.TaskMdaFileWatcher.stopPolling(watcherId);
       }
@@ -1154,7 +1154,7 @@
       // Supprimer l'observateur
       await db.delete('fileWatchers', watcherId);
 
-      // Supprimer les snapshots associÃ©s
+      // Supprimer les snapshots associés
       const tx = db.transaction('fileWatcherSnapshots', 'readwrite');
       const store = tx.objectStore('fileWatcherSnapshots');
       const index = store.index('watcherId');
@@ -1164,9 +1164,9 @@
       }
       await tx.done;
 
-      showToast('Observateur supprimÃ©', 'success');
+      showToast('Observateur supprimé', 'success');
 
-      // Fermer la modale et rafraÃ®chir
+      // Fermer la modale et rafraîchir
       closeWatcherDetailModal();
       await renderFileWatchersList();
 
@@ -1189,7 +1189,7 @@
   async function selectWatcherFolder() {
     try {
       if (!('showDirectoryPicker' in window)) {
-        alert('Votre navigateur ne supporte pas la sÃ©lection de dossiers.\nUtilisez Chrome ou Edge rÃ©cent.');
+        alert('Votre navigateur ne supporte pas la sélection de dossiers.\nUtilisez Chrome ou Edge récent.');
         return;
       }
 
@@ -1207,13 +1207,13 @@
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Error selecting folder:', error);
-        showToast('Erreur lors de la sÃ©lection du dossier', 'error');
+        showToast('Erreur lors de la sélection du dossier', 'error');
       }
     }
   }
 
   // ============================================================================
-  // GESTION DES ONGLETS RÃ‰FÃ‰RENTIELS
+  // GESTION DES ONGLETS RÉFÉRENTIELS
   // ============================================================================
 
   function initSettingsTabs() {
@@ -1245,7 +1245,7 @@
       });
     });
 
-    // Cacher toutes les cartes sauf branding par dÃ©faut
+    // Cacher toutes les cartes sauf branding par défaut
     cards.forEach(card => {
       if (!card.classList.contains('global-settings-card-branding')) {
         card.classList.add('hidden');
@@ -1258,7 +1258,7 @@
   // ============================================================================
 
   function initFileWatcherUI() {
-    // Ã‰viter la double initialisation
+    // Éviter la double initialisation
     if (isInitialized) {
       debugLog('FileWatcherUI already initialized, skipping');
       return;
@@ -1267,13 +1267,13 @@
     // Gestion des onglets
     initSettingsTabs();
 
-    // Bouton crÃ©er
+    // Bouton créer
     const btnCreate = document.getElementById('btn-create-file-watcher');
     if (btnCreate) {
       btnCreate.addEventListener('click', openCreateWatcherModal);
     }
 
-    // SÃ©lection dossier
+    // Sélection dossier
     const btnSelectFolder = document.getElementById('btn-select-watcher-folder');
     if (btnSelectFolder) {
       btnSelectFolder.addEventListener('click', selectWatcherFolder);
@@ -1310,7 +1310,7 @@
     const btnCloseDetail = document.getElementById('btn-close-file-watcher-detail');
     if (btnCloseDetail) btnCloseDetail.addEventListener('click', closeWatcherDetailModal);
 
-    // Actions dans la modale dÃ©tail
+    // Actions dans la modale détail
     const btnToggle = document.getElementById('btn-watcher-toggle');
     if (btnToggle) {
       btnToggle.addEventListener('click', () => {
@@ -1334,7 +1334,7 @@
           openEditWatcherModal(watcherIdToEdit);
         } else {
           console.warn('Cannot edit: no watcher selected');
-          showToast('Aucun observateur sÃ©lectionnÃ©', 'error');
+          showToast('Aucun observateur sélectionné', 'error');
         }
       });
     }
@@ -1346,7 +1346,7 @@
       });
     }
 
-    // Filtres Ã©vÃ©nements
+    // Filtres événements
     document.querySelectorAll('.filter-event-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const filter = btn.dataset.filter;
@@ -1359,28 +1359,28 @@
           b.classList.toggle('border-primary', b === btn);
         });
 
-        // Recharger les Ã©vÃ©nements
+        // Recharger les événements
         if (currentDetailWatcherId) {
           loadWatcherEvents(currentDetailWatcherId, filter);
         }
       });
     });
 
-    // Ã‰couter les mises Ã  jour en temps rÃ©el
+    // Écouter les mises à jour en temps réel
     window.addEventListener('taskmda:file-watcher-updated', async (e) => {
-      // RafraÃ®chir la liste si l'onglet est actif
+      // Rafraîchir la liste si l'onglet est actif
       const tab = document.getElementById('global-settings-tab-file-watcher');
       if (tab && tab.getAttribute('aria-selected') === 'true') {
         await renderFileWatchersList();
       }
 
-      // RafraÃ®chir le dÃ©tail si c'est le watcher ouvert
+      // Rafraîchir le détail si c'est le watcher ouvert
       if (currentDetailWatcherId && currentDetailWatcherId === e.detail.watcherId) {
         await openWatcherDetail(currentDetailWatcherId);
       }
     });
 
-    // Marquer comme initialisÃ©
+    // Marquer comme initialisé
     isInitialized = true;
     debugLog('FileWatcherUI initialized');
   }

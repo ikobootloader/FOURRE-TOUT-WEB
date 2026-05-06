@@ -20,6 +20,10 @@
         : {},
       rorEmailCache: initialState.rorEmailCache instanceof Map ? initialState.rorEmailCache : new Map(),
       rorOrganizationCache: initialState.rorOrganizationCache instanceof Map ? initialState.rorOrganizationCache : new Map(),
+      banSearchState: initialState.banSearchState && typeof initialState.banSearchState === 'object'
+        ? initialState.banSearchState
+        : {},
+      annuaireSubtab: String(initialState.annuaireSubtab || 'esms') === 'addresses' ? 'addresses' : 'esms',
       viaAnnuaireConfigExpanded: typeof initialState.viaAnnuaireConfigExpanded === 'boolean'
         ? initialState.viaAnnuaireConfigExpanded
         : true
@@ -61,6 +65,14 @@
       clearRorOrganizationCache: opts.state?.clearRorOrganizationCache || (() => {
         internalState.rorOrganizationCache.clear();
       }),
+      getBanSearchState: opts.state?.getBanSearchState || (() => internalState.banSearchState),
+      setBanSearchState: opts.state?.setBanSearchState || ((value) => {
+        if (value && typeof value === 'object') internalState.banSearchState = value;
+      }),
+      getAnnuaireSubtab: opts.state?.getAnnuaireSubtab || (() => internalState.annuaireSubtab),
+      setAnnuaireSubtab: opts.state?.setAnnuaireSubtab || ((value) => {
+        internalState.annuaireSubtab = String(value || '') === 'addresses' ? 'addresses' : 'esms';
+      }),
       getViaAnnuaireConfigExpanded: opts.state?.getViaAnnuaireConfigExpanded || (() => internalState.viaAnnuaireConfigExpanded)
     };
     const actions = opts.actions || {};
@@ -88,6 +100,184 @@
       };
     }
 
+    function readViaAnnuaireBanSearchInputs() {
+      const queryInput = document.getElementById('via-annuaire-ban-query');
+      const postcodeInput = document.getElementById('via-annuaire-ban-postcode');
+      const cityInput = document.getElementById('via-annuaire-ban-city');
+      const typeInput = document.getElementById('via-annuaire-ban-type');
+      return {
+        query: String(queryInput?.value || '').trim(),
+        postcode: String(postcodeInput?.value || '').trim(),
+        city: String(cityInput?.value || '').trim(),
+        type: String(typeInput?.value || '').trim()
+      };
+    }
+
+    function renderViaAnnuaireBanSearchPanel() {
+      const queryInput = document.getElementById('via-annuaire-ban-query');
+      const postcodeInput = document.getElementById('via-annuaire-ban-postcode');
+      const cityInput = document.getElementById('via-annuaire-ban-city');
+      const typeInput = document.getElementById('via-annuaire-ban-type');
+      const searchBtn = document.getElementById('btn-via-annuaire-ban-search');
+      const clearBtn = document.getElementById('btn-via-annuaire-ban-clear');
+      const meta = document.getElementById('via-annuaire-ban-meta');
+      const results = document.getElementById('via-annuaire-ban-results');
+      if (!queryInput || !postcodeInput || !cityInput || !typeInput || !searchBtn || !clearBtn || !meta || !results) return;
+
+      const currentState = state.getBanSearchState?.() || {};
+      queryInput.value = String(currentState.query || '');
+      postcodeInput.value = String(currentState.postcode || '');
+      cityInput.value = String(currentState.city || '');
+      typeInput.value = String(currentState.type || '');
+
+      searchBtn.disabled = !!currentState.loading;
+      clearBtn.disabled = !!currentState.loading;
+      meta.textContent = currentState.loading
+        ? 'Interrogation BAN en cours...'
+        : (currentState.lastQueryLabel
+          ? `Dernière recherche BAN: ${currentState.lastQueryLabel}`
+          : 'Aucune recherche BAN effectuée.');
+
+      const rows = Array.isArray(currentState.results) ? currentState.results : [];
+      if (!rows.length) {
+        const emptyMessage = currentState.lastError
+          ? `Erreur BAN: ${currentState.lastError}`
+          : 'Lancez une recherche d\'adresse pour afficher des résultats BAN.';
+        results.innerHTML = `<p class="text-xs text-slate-500 p-3">${helpers.escapeHtml?.(emptyMessage) || emptyMessage}</p>`;
+        return;
+      }
+
+      results.innerHTML = rows.map((row) => {
+        const line1 = helpers.escapeHtml?.(String(row.label || '').trim()) || '';
+        const line2Raw = [row.postcode, row.city, row.context].filter(Boolean).join(' - ');
+        const line2 = helpers.escapeHtml?.(line2Raw) || '';
+        const typeLabel = helpers.escapeHtml?.(String(row.type || 'adresse')) || 'adresse';
+        const score = Number.isFinite(Number(row.score)) ? Number(row.score).toFixed(2) : '-';
+        const encodedAddress = encodeURIComponent(String(row.label || '').trim());
+        return `
+          <article class="p-3 border-b border-slate-100 last:border-b-0">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-800 break-words">${line1}</p>
+                <p class="text-xs text-slate-500 mt-0.5 break-words">${line2}</p>
+                <p class="text-[11px] text-slate-400 mt-1">Type: ${typeLabel} • Score: ${helpers.escapeHtml?.(score) || score}</p>
+              </div>
+              <button type="button" class="task-action-btn task-action-btn-subtle px-2 py-1 text-xs font-semibold via-annuaire-ban-copy-btn" data-ban-address="${helpers.escapeHtml?.(encodedAddress) || encodedAddress}" data-action-kind="default" data-action-label="Copier" aria-label="Copier adresse BAN">
+                <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">content_copy</span>
+              </button>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      results.querySelectorAll('.via-annuaire-ban-copy-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const encoded = String(btn.getAttribute('data-ban-address') || '').trim();
+          const address = decodeURIComponent(encoded);
+          if (!address) return;
+          try {
+            await navigator.clipboard.writeText(address);
+            helpers.showToast?.('Adresse copiée');
+          } catch {
+            helpers.showToast?.('Copie impossible sur ce navigateur');
+          }
+        });
+      });
+    }
+
+    async function runViaAnnuaireBanSearch() {
+      const input = readViaAnnuaireBanSearchInputs();
+      if (!input.query) {
+        helpers.showToast?.('Saisissez une adresse à rechercher');
+        return;
+      }
+      const currentState = state.getBanSearchState?.() || {};
+      const lastQueryLabel = `${input.query}${input.postcode ? ` • CP ${input.postcode}` : ''}${input.city ? ` • ${input.city}` : ''}${input.type ? ` • ${input.type}` : ''}`;
+      state.setBanSearchState?.({
+        ...currentState,
+        ...input,
+        loading: true,
+        lastError: '',
+        lastQueryLabel
+      });
+      renderViaAnnuaireBanSearchPanel();
+      try {
+        const params = new URLSearchParams();
+        params.set('q', input.query);
+        params.set('limit', '15');
+        params.set('autocomplete', '1');
+        if (input.postcode) params.set('postcode', input.postcode);
+        if (input.city) params.set('city', input.city);
+        if (input.type) params.set('type', input.type);
+        const url = `https://api-adresse.data.gouv.fr/search/?${params.toString()}`;
+        const payload = await actions.fetchJsonWithTimeout?.(url, { method: 'GET' }, 15000);
+        const features = Array.isArray(payload?.features) ? payload.features : [];
+        const rows = features.map((feature) => {
+          const props = feature?.properties || {};
+          const geometry = feature?.geometry || {};
+          const coordinates = Array.isArray(geometry?.coordinates) ? geometry.coordinates : [];
+          return {
+            id: String(props.id || ''),
+            label: String(props.label || ''),
+            city: String(props.city || ''),
+            postcode: String(props.postcode || ''),
+            context: String(props.context || ''),
+            type: String(props.type || ''),
+            score: Number(props.score || 0),
+            lon: Number(coordinates[0] || 0),
+            lat: Number(coordinates[1] || 0)
+          };
+        }).filter((row) => row.label);
+        state.setBanSearchState?.({
+          ...state.getBanSearchState?.(),
+          loading: false,
+          results: rows,
+          total: rows.length,
+          lastError: ''
+        });
+        renderViaAnnuaireBanSearchPanel();
+      } catch (error) {
+        const errorMessage = String(error?.message || 'erreur BAN');
+        state.setBanSearchState?.({
+          ...state.getBanSearchState?.(),
+          loading: false,
+          results: [],
+          total: 0,
+          lastError: errorMessage
+        });
+        renderViaAnnuaireBanSearchPanel();
+        helpers.showToast?.(`Recherche BAN impossible: ${errorMessage}`);
+      }
+    }
+
+    function renderAnnuaireSubtabs() {
+      const esmsBtn = document.getElementById('btn-annuaire-subtab-esms');
+      const addressesBtn = document.getElementById('btn-annuaire-subtab-addresses');
+      const esmsPanel = document.getElementById('annuaire-subpanel-esms');
+      const addressesPanel = document.getElementById('annuaire-subpanel-addresses');
+      const panelTitle = document.getElementById('annuaire-panel-title');
+      const panelDescription = document.getElementById('annuaire-panel-description');
+      if (!esmsBtn || !addressesBtn || !esmsPanel || !addressesPanel) return;
+      const active = state.getAnnuaireSubtab?.() || 'esms';
+      const showAddresses = active === 'addresses';
+      esmsPanel.classList.toggle('hidden', showAddresses);
+      addressesPanel.classList.toggle('hidden', !showAddresses);
+      esmsBtn.classList.toggle('view-tab-active', !showAddresses);
+      addressesBtn.classList.toggle('view-tab-active', showAddresses);
+      esmsBtn.setAttribute('aria-selected', showAddresses ? 'false' : 'true');
+      addressesBtn.setAttribute('aria-selected', showAddresses ? 'true' : 'false');
+      if (panelTitle) {
+        panelTitle.textContent = showAddresses
+          ? 'Annuaire adresses (BAN)'
+          : 'Annuaire établissements (lecture seule)';
+      }
+      if (panelDescription) {
+        panelDescription.textContent = showAddresses
+          ? 'Recherche d\'adresses via la Base Adresse Nationale (adresse.data.gouv.fr).'
+          : 'Recherche live basée sur la source publique FINESS (sans stockage local des ESMS), puis ouverture de la fiche ViaTrajectoire via FINESS.';
+      }
+    }
+
     async function renderViaAnnuaireSettingsPanel(options = {}) {
       const canManageBranding = options.canManageBranding !== false;
       const viaAnnuaireStatus = document.getElementById('via-annuaire-status');
@@ -106,6 +296,8 @@
       const viaAnnuaireLiveSearchBtn = document.getElementById('btn-via-annuaire-live-search');
       const viaAnnuaireLivePrevBtn = document.getElementById('btn-via-annuaire-live-prev');
       const viaAnnuaireLiveNextBtn = document.getElementById('btn-via-annuaire-live-next');
+      const viaAnnuaireBanSearchBtn = document.getElementById('btn-via-annuaire-ban-search');
+      const viaAnnuaireBanClearBtn = document.getElementById('btn-via-annuaire-ban-clear');
 
       await ensureViaAnnuaireRorSettingsLoaded();
       await syncViaAnnuaireDepartmentsFromApi({ silent: true });
@@ -152,6 +344,9 @@
       if (viaAnnuaireLiveSearchBtn) viaAnnuaireLiveSearchBtn.disabled = !!liveState.loading;
       if (viaAnnuaireLivePrevBtn) viaAnnuaireLivePrevBtn.disabled = true;
       if (viaAnnuaireLiveNextBtn) viaAnnuaireLiveNextBtn.disabled = true;
+      const banState = state.getBanSearchState?.() || {};
+      if (viaAnnuaireBanSearchBtn) viaAnnuaireBanSearchBtn.disabled = !!banState.loading;
+      if (viaAnnuaireBanClearBtn) viaAnnuaireBanClearBtn.disabled = !!banState.loading;
 
       if (viaAnnuaireStatus) {
         const hasRorConfig = hasViaAnnuaireRorCredentials();
@@ -182,7 +377,9 @@
           ? `Dernière recherche: ${liveState.lastQueryLabel}`
           : 'Aucune recherche annuaire lancée.';
       }
+      renderAnnuaireSubtabs();
       renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+      renderViaAnnuaireBanSearchPanel();
     }
 
     async function syncViaAnnuaireDepartmentsFromApi(options = {}) {
@@ -1269,16 +1466,65 @@
         event.preventDefault();
         await runViaAnnuaireLiveSearch({ fromUi: true, pageIndex: 0 });
       });
+
+      document.getElementById('btn-via-annuaire-ban-search')?.addEventListener('click', async () => {
+        await runViaAnnuaireBanSearch();
+      });
+
+      document.getElementById('btn-via-annuaire-ban-clear')?.addEventListener('click', () => {
+        state.setBanSearchState?.({
+          query: '',
+          postcode: '',
+          city: '',
+          type: '',
+          loading: false,
+          results: [],
+          total: 0,
+          lastError: '',
+          lastQueryLabel: ''
+        });
+        renderViaAnnuaireBanSearchPanel();
+      });
+
+      ['via-annuaire-ban-query', 'via-annuaire-ban-postcode', 'via-annuaire-ban-city'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('keydown', async (event) => {
+          if (event?.key !== 'Enter') return;
+          event.preventDefault();
+          await runViaAnnuaireBanSearch();
+        });
+      });
+
+      document.getElementById('via-annuaire-ban-type')?.addEventListener('change', () => {
+        const currentState = state.getBanSearchState?.() || {};
+        const input = readViaAnnuaireBanSearchInputs();
+        state.setBanSearchState?.({
+          ...currentState,
+          ...input
+        });
+      });
+
+      document.getElementById('btn-annuaire-subtab-esms')?.addEventListener('click', () => {
+        state.setAnnuaireSubtab?.('esms');
+        renderAnnuaireSubtabs();
+      });
+      document.getElementById('btn-annuaire-subtab-addresses')?.addEventListener('click', () => {
+        state.setAnnuaireSubtab?.('addresses');
+        renderAnnuaireSubtabs();
+      });
     }
 
     return {
       readViaAnnuaireLiveSearchInputs,
+      readViaAnnuaireBanSearchInputs,
+      renderAnnuaireSubtabs,
       renderViaAnnuaireSettingsPanel,
       syncViaAnnuaireDepartmentsFromApi,
       renderViaAnnuaireLiveSearchPanel,
+      renderViaAnnuaireBanSearchPanel,
       mapViaAnnuaireLiveResultItem,
       filterViaAnnuaireRecordsBySearchInput,
       runViaAnnuaireLiveSearch,
+      runViaAnnuaireBanSearch,
       buildViaAnnuaireRorLookupUrls,
       ensureViaAnnuaireRorSettingsLoaded,
       saveViaAnnuaireRorSettings,

@@ -9,6 +9,33 @@
   function createModule(options) {
     // Injected dependencies: callbacks/state accessors provided by taskmda-team orchestrator.
     const opts = options || {};
+
+    function getSharedFolderHandle() {
+      return typeof opts.getSharedFolderHandle === 'function' ? opts.getSharedFolderHandle() : null;
+    }
+
+    function canUseSharedFilesystemStorage() {
+      return Boolean(getSharedFolderHandle() && global.TaskMDADocumentStorage?.isAvailable?.());
+    }
+
+    async function storeAttachmentFile(file, context = {}) {
+      const theme = String(context.theme || 'General').trim() || 'General';
+      const scope = String(context.scope || 'project').trim() || 'project';
+      const rubric = String(context.rubric || 'attachment').trim() || 'attachment';
+      const projectId = String(context.projectId || 'global').trim() || 'global';
+      const fsMeta = await global.TaskMDADocumentStorage.writeFile(getSharedFolderHandle(), file, {
+        rubric,
+        scope,
+        projectId,
+        theme
+      });
+      return {
+        storageMode: fsMeta.storageMode || 'fs',
+        storageProvider: fsMeta.storageProvider || 'shared-folder',
+        storagePath: fsMeta.storagePath || '',
+        storedAt: Number(fsMeta.storedAt || Date.now()) || Date.now()
+      };
+    }
     let bound = false;
 
     function bindDom() {
@@ -2053,20 +2080,28 @@
       const input = document.getElementById('task-files');
       const shareToDocs = !!document.getElementById('task-share-docs')?.checked;
       const files = Array.from(input?.files || []);
-      const maxFileSize = 5 * 1024 * 1024;
+      if (!canUseSharedFilesystemStorage()) {
+        throw new Error('Versement indisponible: liez un dossier partage.');
+      }
 
       const attachments = [];
       for (const file of files) {
-        if (file.size > maxFileSize) {
-          throw new Error('Le fichier "' + file.name + '" dépasse 5 Mo');
-        }
-        const data = await opts.fileToDataUrl?.(file);
+        const fsMeta = await storeAttachmentFile(file, {
+          rubric: 'task-attachment',
+          scope: 'project',
+          projectId: String(opts.getCurrentProjectId?.() || 'global').trim() || 'global',
+          theme: String(opts.getCurrentTaskTheme?.() || 'General').trim() || 'General'
+        });
         attachments.push({
           name: file.name,
           size: file.size,
           type: file.type || 'application/octet-stream',
           shareToDocs,
-          data
+          data: '',
+          storageMode: fsMeta.storageMode,
+          storageProvider: fsMeta.storageProvider,
+          storagePath: fsMeta.storagePath,
+          storedAt: fsMeta.storedAt
         });
       }
       return attachments;
@@ -2076,23 +2111,29 @@
       const targetInputId = String(inputId || 'message-files') || 'message-files';
       const input = document.getElementById(targetInputId);
       const files = Array.from(input?.files || []);
-      const maxFileSize = 10 * 1024 * 1024;
+      if (!canUseSharedFilesystemStorage()) {
+        throw new Error('Versement indisponible: liez un dossier partage.');
+      }
 
       const attachments = [];
       const rejected = [];
       for (const file of files) {
-        if (file.size > maxFileSize) {
-          rejected.push('"' + file.name + '" depasse 10 Mo');
-          continue;
-        }
         try {
-          const rawData = await opts.fileToDataUrl?.(file);
-          const optimized = await optimizeMessageAttachment(file, rawData);
+          const fsMeta = await storeAttachmentFile(file, {
+            rubric: 'message-attachment',
+            scope: 'project',
+            projectId: String(opts.getCurrentProjectId?.() || 'global').trim() || 'global',
+            theme: 'Messages'
+          });
           attachments.push({
-            name: optimized.name,
-            size: optimized.size,
-            type: optimized.type,
-            data: optimized.data
+            name: String(file.name || 'piece-jointe'),
+            size: Number(file.size || 0) || 0,
+            type: String(file.type || 'application/octet-stream') || 'application/octet-stream',
+            data: '',
+            storageMode: fsMeta.storageMode,
+            storageProvider: fsMeta.storageProvider,
+            storagePath: fsMeta.storagePath,
+            storedAt: fsMeta.storedAt
           });
         } catch (error) {
           rejected.push('"' + file.name + '" est illisible');

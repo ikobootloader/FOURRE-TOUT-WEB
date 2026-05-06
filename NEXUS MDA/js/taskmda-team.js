@@ -84,6 +84,17 @@
       isViaAnnuaireDomainMatch: coreIsViaAnnuaireDomainMatch
     } = coreUtils;
     const APP_DEBUG = localStorage.getItem('taskmda_debug') === '1';
+    const DOC_ACTION = Object.freeze({
+      PREVIEW: 'preview',
+      DOWNLOAD: 'download',
+      DELETE: 'delete',
+      OPEN_REFERENCE: 'open-reference',
+      OPEN_NOTE_REFERENCE: 'open-note-reference',
+      EDIT: 'edit',
+      MANAGE_BINDING: 'manage-binding',
+      DELETE_TASK_ATTACHMENT: 'delete-task-attachment',
+      DELETE_PROJECT_DOCUMENT: 'delete-project-document'
+    });
 
     function debugLog(...args) {
       if (!APP_DEBUG) return;
@@ -2441,7 +2452,7 @@
           themes: { label: 'Thématiques', buttonId: 'global-settings-tab-themes' },
           groups: { label: 'Groupes', buttonId: 'global-settings-tab-groups' },
           roles: { label: 'Habilitations', buttonId: 'global-settings-tab-roles' },
-          annuaire: { label: 'Annuaire ESMS', buttonId: 'global-settings-tab-annuaire' },
+          annuaire: { label: 'Annuaire', buttonId: 'global-settings-tab-annuaire' },
           'file-watcher': { label: 'Surveillance fichiers', buttonId: 'global-settings-tab-file-watcher' },
           email: { label: 'Generateur email', buttonId: 'global-settings-tab-email' },
           'quick-links': { label: 'Acces rapide web', buttonId: 'global-settings-tab-quick-links' },
@@ -3225,7 +3236,6 @@
         'btn-toggle-global-message-sidebar',
         'btn-toggle-global-feed-composer',
         'btn-toggle-docs-upload',
-        'btn-toggle-project-docs-upload',
         'btn-via-annuaire-config-toggle',
         'btn-via-annuaire-live-audit-toggle',
         'btn-toggle-project-description',
@@ -8294,8 +8304,12 @@
         const content = stripMentionMarkupForDashboard(plainText);
         let [headlineRaw, ...subtitleRaws] = content.split('\\n');
         const headline = stripMentionMarkupForDashboard(headlineRaw || '') || 'Mise à jour';
-        const postTitle = String(post?.title || '').trim();
-        const cardTitle = postTitle || headline || 'Mise à jour';
+        const normalizeDashboardNewsCardTitle = (value) => String(value || '')
+          .replace(/^\s*(nouveau\s+projet\s+cr[ée]é\s*:\s*)/i, '')
+          .replace(/^\s*(nouvelle\s+t[âa]che\s+cr[ée]ée\s*:\s*)/i, '')
+          .trim();
+        const postTitle = normalizeDashboardNewsCardTitle(String(post?.title || '').trim());
+        const cardTitle = postTitle || normalizeDashboardNewsCardTitle(headline) || 'Mise à jour';
         
         let subtitleSrc = subtitleRaws.join(' ').trim();
         if (!subtitleSrc) {
@@ -8998,7 +9012,6 @@
     let messageMarkdownDebounceTimer = null;
     let messageRenderedDraftHtml = '';
     let projectDescriptionExpanded = false;
-    let projectDocsUploadCollapsed = true;
     let projectOverviewCollapsed = localStorage.getItem('taskmda_project_overview_collapsed_v1') === '1';
     let emojiPickerOpen = false;
     let globalEmojiPickerOpen = false;
@@ -10766,7 +10779,7 @@ async function setProjectsPage(page) {
           text: "Les habilitations globales se basent sur les niveaux techniques Propriétaire, Manager et Membre, avec des libellés métier personnalisables."
         },
         annuaire: {
-          title: 'Aide: Annuaire ESMS',
+          title: 'Aide: Annuaire',
           text: "Interrogez l'annuaire public FINESS en lecture seule (PA/PH) avec filtres et tri, puis ouvrez la fiche ViaTrajectoire associée via FINESS."
         },
         'file-watcher': {
@@ -12412,9 +12425,9 @@ async function setProjectsPage(page) {
               if (notesShared?.renderInlineDocLinks) {
                 return notesShared.renderInlineDocLinks([{
                   name: doc.name,
-                  previewAction: `openDocumentPreviewByRef('${refPayload}')`,
-                  downloadAction: `downloadDocumentByRef('${refPayload}')`,
-                  deleteAction: canDeleteDoc ? `deleteProjectNoteLinkedDocument('${escapeHtml(nid)}','${escapeHtml(doc.docId)}')` : ''
+                  previewPayload: { refPayload },
+                  downloadPayload: { refPayload },
+                  deletePayload: canDeleteDoc ? { noteId: nid, docId: doc.docId } : null
                 }], { previewLabel: 'Ouvrir', downloadLabel: 'Télécharger' });
               }
               return `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(doc.name)}</span></div>`;
@@ -12435,6 +12448,39 @@ async function setProjectsPage(page) {
           tagsHtml,
           linksId: 'project-note-read-links',
           linksHtml
+        });
+        notesShared.bindInlineDocLinkActions?.('project-note-read-links', linkedDocs.map((doc) => {
+          const refPayload = encodeURIComponent(JSON.stringify({
+            sourceType: 'project-doc',
+            projectId: String(currentProjectId || ''),
+            docId: doc.docId,
+            sourceProjectName: String(currentProjectState?.project?.name || '')
+          }));
+          const canDeleteDoc = canEditProjectMeta(currentProjectState)
+            || (doc.createdBy && doc.createdBy === String(currentUser?.userId || '').trim())
+            || canManageProjectNote(note, currentProjectState);
+          return {
+            previewPayload: { refPayload },
+            downloadPayload: { refPayload },
+            deletePayload: canDeleteDoc ? { noteId: nid, docId: doc.docId } : null
+          };
+        }), {
+          onPreview(payload) {
+            const ref = String(payload?.refPayload || '').trim();
+            if (!ref) return;
+            openDocumentPreviewByRef(ref);
+          },
+          onDownload(payload) {
+            const ref = String(payload?.refPayload || '').trim();
+            if (!ref) return;
+            downloadDocumentByRef(ref);
+          },
+          onDelete(payload) {
+            const noteId = String(payload?.noteId || '').trim();
+            const docId = String(payload?.docId || '').trim();
+            if (!noteId || !docId) return;
+            deleteProjectNoteLinkedDocument(noteId, docId);
+          }
         });
       } else {
         if (badgesEl) badgesEl.innerHTML = badges.join('');
@@ -15429,49 +15475,54 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         ? existing.linkedDocIds.map((id) => String(id || '').trim()).filter(Boolean)
         : [];
       const createdDocIds = [];
-      if (Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0) {
-        for (const docFile of noteAttachmentDocs) {
-          const docId = uuidv4();
-          createdDocIds.push(docId);
-          await putEncrypted('globalDocs', {
-            id: docId,
-            name: String(docFile?.name || 'Document').trim() || 'Document',
-            type: String(docFile?.type || 'application/octet-stream').trim() || 'application/octet-stream',
-            size: Number(docFile?.size || 0) || 0,
-            data: docFile?.data || '',
-            storageMode: docFile?.storageMode || '',
-            storageProvider: docFile?.storageProvider || '',
-            storagePath: docFile?.storagePath || '',
-            storedAt: Number(docFile?.storedAt || 0) || null,
-            linkedNoteIds: [noteId],
-            theme: noteTheme,
-            sharingMode: normalizeGlobalNoteVisibility(draft.visibility) === 'transverse' ? 'shared' : 'private',
-            createdAt: nowTs,
-            updatedAt: nowTs
-          }, 'id');
+      try {
+        if (Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0) {
+          for (const docFile of noteAttachmentDocs) {
+            const docId = uuidv4();
+            createdDocIds.push(docId);
+            await putEncrypted('globalDocs', {
+              id: docId,
+              name: String(docFile?.name || 'Document').trim() || 'Document',
+              type: String(docFile?.type || 'application/octet-stream').trim() || 'application/octet-stream',
+              size: Number(docFile?.size || 0) || 0,
+              data: '',
+              storageMode: docFile?.storageMode || '',
+              storageProvider: docFile?.storageProvider || '',
+              storagePath: docFile?.storagePath || '',
+              storedAt: Number(docFile?.storedAt || 0) || null,
+              linkedNoteIds: [noteId],
+              theme: noteTheme,
+              sharingMode: normalizeGlobalNoteVisibility(draft.visibility) === 'transverse' ? 'shared' : 'private',
+              createdAt: nowTs,
+              updatedAt: nowTs
+            }, 'id');
+          }
         }
+        const linkedDocIds = Array.from(new Set([...existingLinkedDocIds, ...createdDocIds]));
+        const note = {
+          ...(existing || {}),
+          noteId,
+          title: draft.title,
+          content: draft.content,
+          contentHtml: draft.contentHtml,
+          tags: draft.tags,
+          theme: String(draft.theme || '').trim(),
+          linkedDocIds,
+          visibility: normalizeGlobalNoteVisibility(draft.visibility),
+          shareToGlobalFeed: draft.shareToGlobalFeed === true,
+          createdBy: String(existing?.createdBy || currentUser?.userId || ''),
+          createdByName: String(existing?.createdByName || currentUser?.name || ''),
+          createdAt: Number(existing?.createdAt || nowTs) || nowTs,
+          updatedAt: nowTs,
+          archivedAt: null
+        };
+        await putEncrypted('globalNotes', note, 'noteId');
+        await syncGlobalNoteLinkedDocuments(note.noteId, note.linkedDocIds);
+        await syncGlobalNoteFeed(note);
+      } catch (error) {
+        await cleanupGlobalDocsByIds(createdDocIds);
+        throw error;
       }
-      const linkedDocIds = Array.from(new Set([...existingLinkedDocIds, ...createdDocIds]));
-      const note = {
-        ...(existing || {}),
-        noteId,
-        title: draft.title,
-        content: draft.content,
-        contentHtml: draft.contentHtml,
-        tags: draft.tags,
-        theme: String(draft.theme || '').trim(),
-        linkedDocIds,
-        visibility: normalizeGlobalNoteVisibility(draft.visibility),
-        shareToGlobalFeed: draft.shareToGlobalFeed === true,
-        createdBy: String(existing?.createdBy || currentUser?.userId || ''),
-        createdByName: String(existing?.createdByName || currentUser?.name || ''),
-        createdAt: Number(existing?.createdAt || nowTs) || nowTs,
-        updatedAt: nowTs,
-        archivedAt: null
-      };
-      await putEncrypted('globalNotes', note, 'noteId');
-      await syncGlobalNoteLinkedDocuments(note.noteId, note.linkedDocIds);
-      await syncGlobalNoteFeed(note);
       if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
         await renderGlobalFeed();
       }
@@ -15892,14 +15943,15 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               id: doc.id,
               sourceProjectName: 'Hors projet'
             });
-            return `
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="inline-flex text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(doc.name)}</span>
-                <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir le document" onclick="openDocumentPreviewByRef('${escapeHtml(ref)}')">Ouvrir</button>
-                <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger le document" onclick="downloadDocumentByRef('${escapeHtml(ref)}')">Télécharger</button>
-                ${canManageGlobalNote(note) ? `<button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer le document" onclick="deleteGlobalNoteLinkedDocument('${escapeHtml(nid)}','${escapeHtml(doc.id)}')">Supprimer</button>` : ''}
-              </div>
-            `;
+            if (notesShared?.renderInlineDocLinks) {
+              return notesShared.renderInlineDocLinks([{
+                name: doc.name,
+                previewPayload: { refPayload: ref },
+                downloadPayload: { refPayload: ref },
+                deletePayload: canManageGlobalNote(note) ? { noteId: nid, docId: doc.id } : null
+              }], { previewLabel: 'Ouvrir', downloadLabel: 'Télécharger' });
+            }
+            return `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(doc.name)}</span></div>`;
           }).join('')}</div>`
         : '<p class="text-xs text-slate-500 mt-1">Aucun document lié</p>';
       const linksHtml = `<p class="text-xs text-slate-500">Aucune tache liee</p>${docsHtml}`;
@@ -15917,6 +15969,35 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           tagsHtml,
           linksId: 'global-read-links',
           linksHtml
+        });
+        notesShared.bindInlineDocLinkActions?.('global-read-links', linkedDocs.map((doc) => {
+          const ref = encodeDocumentPreviewRef({
+            sourceType: 'standalone',
+            id: doc.id,
+            sourceProjectName: 'Hors projet'
+          });
+          return {
+            previewPayload: { refPayload: ref },
+            downloadPayload: { refPayload: ref },
+            deletePayload: canManageGlobalNote(note) ? { noteId: nid, docId: doc.id } : null
+          };
+        }), {
+          onPreview(payload) {
+            const ref = String(payload?.refPayload || '').trim();
+            if (!ref) return;
+            openDocumentPreviewByRef(ref);
+          },
+          onDownload(payload) {
+            const ref = String(payload?.refPayload || '').trim();
+            if (!ref) return;
+            downloadDocumentByRef(ref);
+          },
+          onDelete(payload) {
+            const noteId = String(payload?.noteId || '').trim();
+            const docId = String(payload?.docId || '').trim();
+            if (!noteId || !docId) return;
+            deleteGlobalNoteLinkedDocument(noteId, docId);
+          }
         });
       } else {
         titleEl.textContent = titleText;
@@ -16090,22 +16171,54 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       badgesEl.innerHTML = `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(typeMeta.label)}</span>`;
       contentEl.innerHTML = renderGlobalFeedContentHtml(post.content || '', mentionCatalog) || '<p>Aucun contenu.</p>';
       const refsHtml = refs.map((ref) => `
-        <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la reference" onclick="openGlobalFeedReference('${escapeHtml(String(ref?.type || ''))}','${encodeURIComponent(String(ref?.id || ''))}')">
+        <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la reference" data-doc-action="${DOC_ACTION.OPEN_REFERENCE}" data-doc-ref-type="${escapeHtml(String(ref?.type || ''))}" data-doc-ref-id="${encodeURIComponent(String(ref?.id || ''))}">
           ${escapeHtml(String(ref?.label || 'Reference'))}
         </button>
       `).join('');
       const docsHtml = linkedDocs.map((doc) => {
         const ref = String(doc?.ref || '').trim();
         if (!ref) return '';
-        return `
-          <div class="inline-flex items-center gap-1 mr-2 mb-1">
-            <span class="inline-flex items-center text-xs text-slate-700">📎 ${escapeHtml(doc.name)}</span>
-            <button type="button" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu" onclick="event.stopPropagation(); openDocumentPreviewByRef('${escapeHtml(ref)}')">Aperçu</button>
-            <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" onclick="event.stopPropagation(); downloadDocumentByRef('${escapeHtml(ref)}')">Télécharger</button>
-          </div>
-        `;
+        if (notesShared?.renderInlineDocLinks) {
+          return notesShared.renderInlineDocLinks([{
+            name: doc.name,
+            previewPayload: { refPayload: ref },
+            downloadPayload: { refPayload: ref }
+          }], { previewLabel: 'Aperçu', downloadLabel: 'Télécharger' });
+        }
+        return `<div class="inline-flex items-center gap-1 mr-2 mb-1"><span class="inline-flex items-center text-xs text-slate-700">📎 ${escapeHtml(doc.name)}</span></div>`;
       }).join('');
       linksEl.innerHTML = `${refsHtml}${docsHtml}`;
+      notesShared?.bindInlineDocLinkActions?.('global-read-links', linkedDocs.map((doc) => {
+        const ref = String(doc?.ref || '').trim();
+        return {
+          previewPayload: ref ? { refPayload: ref } : null,
+          downloadPayload: ref ? { refPayload: ref } : null
+        };
+      }), {
+        onPreview(payload) {
+          const ref = String(payload?.refPayload || '').trim();
+          if (!ref) return;
+          openDocumentPreviewByRef(ref);
+        },
+        onDownload(payload) {
+          const ref = String(payload?.refPayload || '').trim();
+          if (!ref) return;
+          downloadDocumentByRef(ref);
+        }
+      });
+      if (!linksEl.__taskMdaFeedRefDelegationBound) {
+        linksEl.addEventListener('click', (event) => {
+          const btn = event.target instanceof Element ? event.target.closest(`[data-doc-action="${DOC_ACTION.OPEN_REFERENCE}"]`) : null;
+          if (!btn) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const type = String(btn.getAttribute('data-doc-ref-type') || '').trim();
+          const id = String(btn.getAttribute('data-doc-ref-id') || '').trim();
+          if (!type || !id) return;
+          openGlobalFeedReference(type, id);
+        });
+        linksEl.__taskMdaFeedRefDelegationBound = true;
+      }
 
       notesShared?.openModal?.('modal-global-read');
       if (!notesShared) {
@@ -16115,6 +16228,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function buildGlobalNoteCardHtml(note, options = {}) {
+      const notesShared = window.TaskMDANotesShared;
       const canManage = !!options.canManage;
       const bulkSelectionMode = !!options.bulkSelectionMode;
       const isSelectedForBulkDelete = !!options.isSelectedForBulkDelete;
@@ -16174,13 +16288,14 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
                         id: doc.id,
                         sourceProjectName: 'Hors projet'
                       });
-                      return `
-                        <span class="inline-flex items-center gap-1" onclick="event.stopPropagation();">
-                          <span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(String(doc.name || 'Document'))}</span>
-                          <button type="button" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu" onclick="event.stopPropagation(); openDocumentPreviewByRef('${escapeHtml(ref)}')">Aperçu</button>
-                          <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" onclick="event.stopPropagation(); downloadDocumentByRef('${escapeHtml(ref)}')">Télécharger</button>
-                        </span>
-                      `;
+                      if (notesShared?.renderInlineDocLinks) {
+                        return notesShared.renderInlineDocLinks([{
+                          name: String(doc.name || 'Document'),
+                          previewPayload: { refPayload: ref },
+                          downloadPayload: { refPayload: ref }
+                        }]);
+                      }
+                      return `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(String(doc.name || 'Document'))}</span>`;
                     }).join('')}
                     ${linkedDocs.length > 4 ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">+${linkedDocs.length - 4}</span>` : ''}
                   </div>
@@ -16510,6 +16625,18 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         }, 40);
       }
       updateGlobalNotesBulkDeleteUi();
+      window.TaskMDANotesShared?.bindInlineDocLinkActions?.('global-notes-list', null, {
+        onPreview(payload) {
+          const ref = String(payload?.refPayload || '').trim();
+          if (!ref) return;
+          openDocumentPreviewByRef(ref);
+        },
+        onDownload(payload) {
+          const ref = String(payload?.refPayload || '').trim();
+          if (!ref) return;
+          downloadDocumentByRef(ref);
+        }
+      });
     }
 
     async function resolveUserRowsByIds(userIds = []) {
@@ -19013,12 +19140,29 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           attachmentsEl.innerHTML = attachments.map((file, index) => {
             const safeHref = sanitizeDownloadHref(file?.data || '', String(file?.type || ''));
             const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
+            const storagePath = String(file?.storagePath || '').trim();
+            const canOpenFromStorage = !safeHref && storagePath;
             return `
             <span class="inline-flex items-center gap-2 mr-3 mb-1">
-              <a class="inline-flex items-center gap-1 text-primary hover:underline ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}"` : ''}>
-                <span class="material-symbols-outlined text-sm">attach_file</span>
-                <span>${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}</span>
-              </a>
+              ${safeHref ? `
+                <a class="inline-flex items-center gap-1 text-primary hover:underline" href="${href}" download="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}">
+                  <span class="material-symbols-outlined text-sm">attach_file</span>
+                  <span>${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}</span>
+                </a>
+              ` : `
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 text-primary hover:underline ${canOpenFromStorage ? '' : 'opacity-60 pointer-events-none'}"
+                  data-storage-attachment-open="1"
+                  data-storage-path="${escapeHtml(storagePath)}"
+                  data-storage-name="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}"
+                  data-storage-type="${escapeHtml(String(file?.type || 'application/octet-stream'))}"
+                  ${canOpenFromStorage ? '' : 'disabled'}
+                >
+                  <span class="material-symbols-outlined text-sm">attach_file</span>
+                  <span>${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}</span>
+                </button>
+              `}
               ${canDeleteAttachment ? `<button type="button" class="task-action-btn task-action-btn-danger" onclick="removeAttachment('${escapeHtml(task.taskId)}', ${index})">Supprimer</button>` : ''}
             </span>
           `;
@@ -19186,12 +19330,29 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               const file = item.file || {};
               const safeHref = sanitizeDownloadHref(file?.data || '', String(file?.type || ''));
               const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
+              const storagePath = String(file?.storagePath || '').trim();
+              const canOpenFromStorage = !safeHref && storagePath;
               return `
                 <span class="inline-flex items-center gap-2 mr-3 mb-1">
-                  <a class="inline-flex items-center gap-1 text-primary hover:underline ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}"` : ''}>
-                    <span class="material-symbols-outlined text-sm">attach_file</span>
-                    <span>${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}</span>
-                  </a>
+                  ${safeHref ? `
+                    <a class="inline-flex items-center gap-1 text-primary hover:underline" href="${href}" download="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}">
+                      <span class="material-symbols-outlined text-sm">attach_file</span>
+                      <span>${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}</span>
+                    </a>
+                  ` : `
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 text-primary hover:underline ${canOpenFromStorage ? '' : 'opacity-60 pointer-events-none'}"
+                      data-storage-attachment-open="1"
+                      data-storage-path="${escapeHtml(storagePath)}"
+                      data-storage-name="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}"
+                      data-storage-type="${escapeHtml(String(file?.type || 'application/octet-stream'))}"
+                      ${canOpenFromStorage ? '' : 'disabled'}
+                    >
+                      <span class="material-symbols-outlined text-sm">attach_file</span>
+                      <span>${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}</span>
+                    </button>
+                  `}
                   ${canEdit ? `<button type="button" class="task-action-btn task-action-btn-danger" onclick="removeAttachment('${escapeHtml(task.taskId)}', ${item.index})">Supprimer</button>` : ''}
                 </span>
               `;
@@ -20645,19 +20806,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       navWrap.classList.remove('hidden');
     }
 
-    function setProjectDocsUploadCollapsed(collapsed) {
-      const body = document.getElementById('project-docs-upload-body');
-      const toggleBtn = document.getElementById('btn-toggle-project-docs-upload');
-      const toggleIcon = document.getElementById('project-docs-upload-toggle-icon');
-      if (!body || !toggleBtn || !toggleIcon) return;
-      const shouldCollapse = Boolean(collapsed);
-      projectDocsUploadCollapsed = shouldCollapse;
-      body.classList.toggle('hidden', shouldCollapse);
-      toggleBtn.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
-      toggleBtn.title = shouldCollapse ? 'Développer' : 'Replier';
-      toggleIcon.textContent = shouldCollapse ? 'expand_more' : 'expand_less';
-    }
-
     function renderProjectDescription(descriptionText = '') {
       const descEl = document.getElementById('project-description-display');
       const toggleBtn = document.getElementById('btn-toggle-project-description');
@@ -21200,6 +21348,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const messageFiles = document.getElementById('message-files');
       const btnToggleEmojiPicker = document.getElementById('btn-toggle-emoji-picker');
       const btnToggleMessageFiles = document.getElementById('btn-toggle-message-files');
+      const btnOpenProjectDocModal = document.getElementById('btn-open-project-doc-upload-modal');
       const btnAddProjectDocs = document.getElementById('btn-add-project-documents');
       const projectDocFilesInput = document.getElementById('project-doc-files');
       const projectDocTaskLinks = document.getElementById('project-doc-task-links');
@@ -21233,11 +21382,17 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         btnToggleMessageFiles.disabled = !canSendChat;
         btnToggleMessageFiles.classList.toggle('opacity-50', !canSendChat);
       }
+      if (btnOpenProjectDocModal) {
+        btnOpenProjectDocModal.disabled = !canSendChat;
+        btnOpenProjectDocModal.classList.toggle('opacity-50', !canSendChat);
+        btnOpenProjectDocModal.title = canSendChat ? '' : 'Réservé aux membres du projet';
+      }
       if (btnAddProjectDocs) {
         btnAddProjectDocs.disabled = !canSendChat;
         btnAddProjectDocs.classList.toggle('opacity-50', !canSendChat);
         btnAddProjectDocs.title = canSendChat ? '' : 'Réservé aux membres du projet';
       }
+      if (!canSendChat) closeProjectDocUploadModal();
       if (projectDocFilesInput) projectDocFilesInput.disabled = !canSendChat;
       if (projectDocTaskLinks) projectDocTaskLinks.disabled = !canSendChat || (projectDocTaskLinks.options?.length || 0) === 0;
       if (projectDocThemeInput) projectDocThemeInput.disabled = !canSendChat;
@@ -22193,6 +22348,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
                 type: file.type,
                 size: file.size,
                 data: file.data,
+                storageMode: file.storageMode || '',
+                storageProvider: file.storageProvider || '',
+                storagePath: file.storagePath || '',
+                storedAt: Number(file.storedAt || 0) || null,
                 theme: task.theme || state.project.name || 'Projet',
                 sourceProjectName: state.project.name,
                 sourceProjectId: state.project.projectId,
@@ -24039,6 +24198,20 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       globalDocsRuntime.closeGlobalDocUploadModal();
     }
 
+    function openProjectDocUploadModal() {
+      const modal = document.getElementById('modal-project-doc-upload');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    function closeProjectDocUploadModal() {
+      const modal = document.getElementById('modal-project-doc-upload');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
     async function openDocumentPreviewByRef(refEncoded = '') {
       if (!globalDocsRuntime?.openDocumentPreviewByRef) return;
       await globalDocsRuntime.openDocumentPreviewByRef(refEncoded);
@@ -25471,6 +25644,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     let editingGlobalFeedPostId = null;
     let globalFeedLinkedDocIdsDraft = new Set();
+    let globalFeedDraftCreatedDocIds = new Set();
 
     function setGlobalFeedComposerCollapsed(collapsed, options = {}) {
       const panel = document.querySelector('.feed-composer-panel');
@@ -25570,8 +25744,54 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       return [];
     }
 
-    function cancelEditGlobalFeedPost() {
+    function addGlobalFeedDraftCreatedDocIds(ids = []) {
+      const next = new Set(
+        Array.from(globalFeedDraftCreatedDocIds || [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      );
+      (Array.isArray(ids) ? ids : []).forEach((id) => {
+        const normalized = String(id || '').trim();
+        if (normalized) next.add(normalized);
+      });
+      globalFeedDraftCreatedDocIds = next;
+      return Array.from(globalFeedDraftCreatedDocIds);
+    }
+
+    function consumeGlobalFeedDraftCreatedDocIds() {
+      const ids = Array.from(globalFeedDraftCreatedDocIds || [])
+        .map((id) => String(id || '').trim())
+        .filter(Boolean);
+      globalFeedDraftCreatedDocIds = new Set();
+      return ids;
+    }
+
+    async function cleanupGlobalDocsByIds(docIds = []) {
+      const normalizedIds = Array.from(new Set(
+        (Array.isArray(docIds) ? docIds : [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      ));
+      if (normalizedIds.length === 0) return;
+      for (const docId of normalizedIds) {
+        const doc = await getDecrypted('globalDocs', docId, 'id');
+        if (!doc) continue;
+        if (doc.storageMode === 'fs'
+          && doc.storagePath
+          && sharedFolderHandle
+          && window.TaskMDADocumentStorage?.removeFile) {
+          try {
+            await window.TaskMDADocumentStorage.removeFile(sharedFolderHandle, doc.storagePath);
+          } catch (_) {}
+        }
+        await deleteFromStore('globalDocs', docId);
+      }
+    }
+
+    async function cancelEditGlobalFeedPost() {
       editingGlobalFeedPostId = null;
+      const draftCreatedDocIds = consumeGlobalFeedDraftCreatedDocIds();
+      await cleanupGlobalDocsByIds(draftCreatedDocIds);
       resetGlobalFeedLinkedDocIdsDraft();
       document.getElementById('global-feed-composer-title').textContent = "Nouveau post d'information";
       document.getElementById('global-feed-post-btn-label').textContent = "Publier";
@@ -27218,29 +27438,35 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (!Array.isArray(docs) || docs.length === 0) return false;
 
       const createdDocIds = [];
-      for (const file of docs) {
-        const row = {
-          id: uuidv4(),
-          name: file.name,
-          type: file.type || 'application/octet-stream',
-          size: file.size,
-          data: file.data || '',
-          storageMode: file.storageMode || '',
-          storageProvider: file.storageProvider || '',
-          storagePath: file.storagePath || '',
-          storedAt: Number(file.storedAt || 0) || null,
-          theme,
-          sharingMode,
-          createdAt: Date.now()
-        };
-        await putEncrypted('globalDocs', row, 'id');
-        createdDocIds.push(String(row.id || '').trim());
+      try {
+        for (const file of docs) {
+          const row = {
+            id: uuidv4(),
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            size: file.size,
+            data: '',
+            storageMode: file.storageMode || '',
+            storageProvider: file.storageProvider || '',
+            storagePath: file.storagePath || '',
+            storedAt: Number(file.storedAt || 0) || null,
+            theme,
+            sharingMode,
+            createdAt: Date.now()
+          };
+          await putEncrypted('globalDocs', row, 'id');
+          createdDocIds.push(String(row.id || '').trim());
+        }
+      } catch (error) {
+        await cleanupGlobalDocsByIds(createdDocIds);
+        throw error;
       }
 
       if (sourceInput) sourceInput.value = '';
       const targetEditorId = String(options?.editorId || '').trim();
       if (targetEditorId === 'global-feed-editor') {
         addGlobalFeedLinkedDocIdsDraft(createdDocIds);
+        addGlobalFeedDraftCreatedDocIds(createdDocIds);
         await updateGlobalFeedMentionCounter();
       } else {
         const insertedBlocks = [];
@@ -27254,7 +27480,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           String(options?.fallbackInputId || ''),
           insertedBlocks
         );
-        if (!inserted) return false;
+        if (!inserted) {
+          await cleanupGlobalDocsByIds(createdDocIds);
+          return false;
+        }
       }
       await renderGlobalDocs();
       showToast(`${docs.length} document(s) intégré(s)`);
@@ -30261,7 +30490,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           attachmentIndex: Number.isFinite(Number(doc?.attachmentIndex)) ? Number(doc.attachmentIndex) : -1,
           sourceProjectName: String(doc?.sourceProjectName || '').trim()
         };
-        return encodeURIComponent(JSON.stringify(payload));
+        // `encodeURIComponent` keeps `'()` untouched; force escaping to keep inline onclick string valid.
+        return encodeURIComponent(JSON.stringify(payload)).replace(/[!'()]/g, (char) => {
+          return `%${char.charCodeAt(0).toString(16).toUpperCase()}`;
+        });
       } catch {
         return '';
       }
@@ -31279,17 +31511,62 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const input = document.getElementById(inputId);
       const file = input?.files?.[0];
       if (!file) return null;
-      return await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve({
-          name: file.name,
-          type: file.type || 'application/octet-stream',
-          size: file.size || 0,
-          data: reader.result
+      return {
+        file,
+        name: String(file.name || 'document').trim() || 'document',
+        type: String(file.type || 'application/octet-stream') || 'application/octet-stream',
+        size: Number(file.size || 0) || 0
+      };
+    }
+
+    async function persistEditedDocumentToSharedStorage(sourceDoc = {}, payload = {}, context = {}) {
+      if (!canUseSharedFilesystemDocumentStorage() || !sharedFolderHandle) {
+        throw new Error('Stockage partage requis pour enregistrer ce document.');
+      }
+      const safePayload = payload && typeof payload === 'object' ? payload : {};
+      const safeContext = context && typeof context === 'object' ? context : {};
+      const oldPath = String(sourceDoc?.storagePath || '').trim();
+      const rubric = inferStorageRubricFromPath(oldPath, String(safeContext.rubric || 'document-edit').trim() || 'document-edit');
+      const scope = inferStorageScopeFromPath(oldPath, String(safeContext.scope || 'project').trim() || 'project');
+      const projectId = inferStorageProjectFromPath(oldPath, String(safeContext.projectId || 'global').trim() || 'global');
+      const theme = String(safeContext.theme || sourceDoc?.theme || 'General').trim() || 'General';
+      const fileName = String(safePayload.name || sourceDoc?.name || 'document').trim() || 'document';
+
+      let fsMeta = null;
+      if (safePayload.file) {
+        fsMeta = await window.TaskMDADocumentStorage.writeFile(sharedFolderHandle, safePayload.file, {
+          rubric,
+          scope,
+          projectId,
+          theme
         });
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      } else {
+        fsMeta = await window.TaskMDADocumentStorage.writeDataUrl(sharedFolderHandle, String(safePayload.dataUrl || ''), {
+          rubric,
+          scope,
+          projectId,
+          theme,
+          fileName
+        });
+      }
+
+      const nextPath = String(fsMeta?.storagePath || '').trim();
+      if (oldPath && nextPath && oldPath !== nextPath && window.TaskMDADocumentStorage?.removeFile) {
+        try {
+          await window.TaskMDADocumentStorage.removeFile(sharedFolderHandle, oldPath);
+        } catch (_) {}
+      }
+
+      return {
+        name: fileName,
+        type: String(safePayload.type || sourceDoc?.type || 'application/octet-stream').trim() || 'application/octet-stream',
+        size: Number(safePayload.size || 0) || 0,
+        data: '',
+        storageMode: String(fsMeta?.storageMode || 'fs').trim() || 'fs',
+        storageProvider: String(fsMeta?.storageProvider || 'shared-folder').trim() || 'shared-folder',
+        storagePath: nextPath,
+        storedAt: Number(fsMeta?.storedAt || Date.now()) || Date.now()
+      };
     }
 
     async function openDocumentEditorModal(context) {
@@ -31396,21 +31673,12 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (!ctx?.doc || !ctx.mode) return;
       const textarea = document.getElementById('doc-editor-textarea');
       const nextContent = getDocumentEditorTextByMode(ctx.mode, textarea, ctx.doc);
-      const replacement = ctx.mode === 'word-replace'
-        ? await readSingleDocumentFileFromInput('doc-editor-file-input')
-        : ctx.mode === 'spreadsheet-xlsx'
-          ? {
-              name: ctx.doc?.name,
-              type: ctx.doc?.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-              data: String(nextContent || ''),
-              size: Math.max(0, decodeDataUrlToBytes(String(nextContent || '')).byteLength || 0)
-            }
-        : null;
-      if (ctx.mode === 'word-replace' && !replacement) {
+      const replacement = ctx.mode === 'word-replace' ? await readSingleDocumentFileFromInput('doc-editor-file-input') : null;
+      if (ctx.mode === 'word-replace' && !replacement?.file) {
         showToast('Sélectionnez un fichier Word');
         return;
       }
-      if (ctx.mode === 'spreadsheet-xlsx' && !replacement?.data) {
+      if (ctx.mode === 'spreadsheet-xlsx' && !String(nextContent || '').trim()) {
         showToast('Aucune donnée XLSX à enregistrer');
         return;
       }
@@ -31422,37 +31690,42 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             showToast('Document introuvable');
             return;
           }
-          const next = ctx.mode === 'text'
-            ? {
-                ...row,
-                data: encodeTextToDataUrl(nextContent, row.type || 'text/plain;charset=utf-8'),
-                size: new TextEncoder().encode(String(nextContent)).length,
-                updatedAt: Date.now()
-              }
+          const serializedDataUrl = ctx.mode === 'text'
+            ? encodeTextToDataUrl(nextContent, row.type || 'text/plain;charset=utf-8')
             : ctx.mode === 'spreadsheet-css'
+              ? encodeTextToDataUrl(nextContent, row.type || 'text/css;charset=utf-8')
+              : ctx.mode === 'spreadsheet-xlsx'
+                ? String(nextContent || '')
+                : '';
+          const persisted = await persistEditedDocumentToSharedStorage(
+            row,
+            ctx.mode === 'word-replace'
               ? {
-                  ...row,
-                  data: encodeTextToDataUrl(nextContent, row.type || 'text/css;charset=utf-8'),
-                  size: new TextEncoder().encode(String(nextContent)).length,
-                  updatedAt: Date.now()
-                }
-            : ctx.mode === 'spreadsheet-xlsx'
-              ? {
-                  ...row,
+                  file: replacement.file,
                   name: replacement.name || row.name,
                   type: replacement.type || row.type,
-                  size: replacement.size || row.size,
-                  data: replacement.data || row.data,
-                  updatedAt: Date.now()
+                  size: replacement.size || row.size
                 }
-            : {
-                ...row,
-                name: replacement.name || row.name,
-                type: replacement.type || row.type,
-                size: replacement.size || row.size,
-                data: replacement.data || row.data,
-                updatedAt: Date.now()
-              };
+              : {
+                  dataUrl: serializedDataUrl,
+                  name: row.name,
+                  type: row.type,
+                  size: ctx.mode === 'spreadsheet-xlsx'
+                    ? Math.max(0, decodeDataUrlToBytes(String(serializedDataUrl || '')).byteLength || 0)
+                    : new TextEncoder().encode(String(nextContent)).length
+                },
+            {
+              rubric: 'document-edit',
+              scope: 'global',
+              projectId: 'global',
+              theme: String(row?.theme || 'General')
+            }
+          );
+          const next = {
+            ...row,
+            ...persisted,
+            updatedAt: Date.now()
+          };
           await putEncrypted('globalDocs', next, 'id');
           showToast('Document mis à jour');
           closeDocumentEditorModal();
@@ -31471,37 +31744,42 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             showToast('Document introuvable');
             return;
           }
-          const updated = ctx.mode === 'text'
-            ? {
-                ...existing,
-                data: encodeTextToDataUrl(nextContent, existing.type || 'text/plain;charset=utf-8'),
-                size: new TextEncoder().encode(String(nextContent)).length,
-                uploadedAt: Date.now()
-              }
+          const serializedDataUrl = ctx.mode === 'text'
+            ? encodeTextToDataUrl(nextContent, existing.type || 'text/plain;charset=utf-8')
             : ctx.mode === 'spreadsheet-css'
+              ? encodeTextToDataUrl(nextContent, existing.type || 'text/css;charset=utf-8')
+              : ctx.mode === 'spreadsheet-xlsx'
+                ? String(nextContent || '')
+                : '';
+          const persisted = await persistEditedDocumentToSharedStorage(
+            existing,
+            ctx.mode === 'word-replace'
               ? {
-                  ...existing,
-                  data: encodeTextToDataUrl(nextContent, existing.type || 'text/css;charset=utf-8'),
-                  size: new TextEncoder().encode(String(nextContent)).length,
-                  uploadedAt: Date.now()
-                }
-            : ctx.mode === 'spreadsheet-xlsx'
-              ? {
-                  ...existing,
+                  file: replacement.file,
                   name: replacement.name || existing.name,
                   type: replacement.type || existing.type,
-                  size: replacement.size || existing.size,
-                  data: replacement.data || existing.data,
-                  uploadedAt: Date.now()
+                  size: replacement.size || existing.size
                 }
-            : {
-                ...existing,
-                name: replacement.name || existing.name,
-                type: replacement.type || existing.type,
-                size: replacement.size || existing.size,
-                data: replacement.data || existing.data,
-                uploadedAt: Date.now()
-              };
+              : {
+                  dataUrl: serializedDataUrl,
+                  name: existing.name,
+                  type: existing.type,
+                  size: ctx.mode === 'spreadsheet-xlsx'
+                    ? Math.max(0, decodeDataUrlToBytes(String(serializedDataUrl || '')).byteLength || 0)
+                    : new TextEncoder().encode(String(nextContent)).length
+                },
+            {
+              rubric: 'project-doc',
+              scope: 'project',
+              projectId: String(ctx.projectId || 'global'),
+              theme: String(existing?.theme || state.project?.name || 'General')
+            }
+          );
+          const updated = {
+            ...existing,
+            ...persisted,
+            uploadedAt: Date.now()
+          };
 
           const delEvent = createEvent(EventTypes.DELETE_DOCUMENT, ctx.projectId, currentUser.userId, { docId: existing.docId });
           await publishEvent(delEvent);
@@ -31511,7 +31789,11 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             name: updated.name,
             type: updated.type,
             size: updated.size,
-            data: updated.data,
+            data: '',
+            storageMode: updated.storageMode || 'fs',
+            storageProvider: updated.storageProvider || 'shared-folder',
+            storagePath: updated.storagePath || '',
+            storedAt: Number(updated.storedAt || Date.now()) || Date.now(),
             notes: updated.notes || '',
             theme: updated.theme || 'General',
             sharingMode: normalizeSharingMode(updated.sharingMode, normalizeSharingMode(state.project.sharingMode, 'shared')),
@@ -31543,33 +31825,42 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             showToast('Pièce jointe introuvable');
             return;
           }
-          attachments[idx] = ctx.mode === 'text'
-            ? {
-                ...attachments[idx],
-                data: encodeTextToDataUrl(nextContent, attachments[idx].type || 'text/plain;charset=utf-8'),
-                size: new TextEncoder().encode(String(nextContent)).length
-              }
+          const currentAttachment = attachments[idx];
+          const serializedDataUrl = ctx.mode === 'text'
+            ? encodeTextToDataUrl(nextContent, currentAttachment.type || 'text/plain;charset=utf-8')
             : ctx.mode === 'spreadsheet-css'
+              ? encodeTextToDataUrl(nextContent, currentAttachment.type || 'text/css;charset=utf-8')
+              : ctx.mode === 'spreadsheet-xlsx'
+                ? String(nextContent || '')
+                : '';
+          const persisted = await persistEditedDocumentToSharedStorage(
+            currentAttachment,
+            ctx.mode === 'word-replace'
               ? {
-                  ...attachments[idx],
-                  data: encodeTextToDataUrl(nextContent, attachments[idx].type || 'text/css;charset=utf-8'),
-                  size: new TextEncoder().encode(String(nextContent)).length
+                  file: replacement.file,
+                  name: replacement.name || currentAttachment.name,
+                  type: replacement.type || currentAttachment.type,
+                  size: replacement.size || currentAttachment.size
                 }
-            : ctx.mode === 'spreadsheet-xlsx'
-              ? {
-                  ...attachments[idx],
-                  name: replacement.name || attachments[idx].name,
-                  type: replacement.type || attachments[idx].type,
-                  size: replacement.size || attachments[idx].size,
-                  data: replacement.data || attachments[idx].data
-                }
-            : {
-                ...attachments[idx],
-                name: replacement.name || attachments[idx].name,
-                type: replacement.type || attachments[idx].type,
-                size: replacement.size || attachments[idx].size,
-                data: replacement.data || attachments[idx].data
-              };
+              : {
+                  dataUrl: serializedDataUrl,
+                  name: currentAttachment.name,
+                  type: currentAttachment.type,
+                  size: ctx.mode === 'spreadsheet-xlsx'
+                    ? Math.max(0, decodeDataUrlToBytes(String(serializedDataUrl || '')).byteLength || 0)
+                    : new TextEncoder().encode(String(nextContent)).length
+                },
+            {
+              rubric: 'task-attachment',
+              scope: 'project',
+              projectId: String(ctx.projectId || 'global'),
+              theme: String(task?.theme || state?.project?.name || 'General')
+            }
+          );
+          attachments[idx] = {
+            ...currentAttachment,
+            ...persisted
+          };
 
           const event = createEvent(EventTypes.UPDATE_TASK, ctx.projectId, currentUser.userId, {
             taskId: task.taskId,
@@ -31674,6 +31965,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     window.openProjectDocumentEditor = openProjectDocumentEditor;
     window.openGlobalDocumentEditor = openGlobalDocumentEditor;
+    window.openProjectDocUploadModal = openProjectDocUploadModal;
     window.openProjectNoteFromDocument = openProjectNoteFromDocument;
     window.deleteProjectNoteLinkedDocument = deleteProjectNoteLinkedDocument;
     window.openDocumentPreviewByRef = openDocumentPreviewByRef;
@@ -31759,7 +32051,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             title: 'Aucun document partagé',
             text: 'Ajoutez un document au projet pour commencer.',
             ctaLabel: 'Ajouter un document',
-            ctaOnclick: "(function(){const btn=document.getElementById('btn-toggle-project-docs-upload');const card=btn?.closest('.docs-upload-card');if(btn&&btn.getAttribute('aria-expanded')==='false'){btn.click();}if(card){card.classList.add('highlight-flash');setTimeout(()=>card.classList.remove('highlight-flash'),1200);card.scrollIntoView({behavior:'smooth',block:'start'});}else{window.scrollTo({top:0,behavior:'smooth'});}})()"
+            ctaOnclick: "openProjectDocUploadModal()"
           });
         } else {
           container.innerHTML = '<p class="text-gray-500 text-center py-8 col-span-full">Aucun document ne correspond aux filtres</p>';
@@ -31788,7 +32080,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             <div class="flex flex-wrap items-center gap-1 mb-2">
               ${linkedNoteIds.map((noteId) => {
                 const title = noteTitleById.get(noteId) || 'Note';
-                return `<button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la note source" onclick="openProjectNoteFromDocument('${escapeHtml(noteId)}')">Note: ${escapeHtml(title)}</button>`;
+                return `<button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la note source" data-doc-action="${DOC_ACTION.OPEN_NOTE_REFERENCE}" data-doc-note-id="${escapeHtml(noteId)}">Note: ${escapeHtml(title)}</button>`;
               }).join('')}
             </div>
           `
@@ -31802,6 +32094,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         const canEditProjectDoc = doc.sourceType === 'project-doc'
           && (canEditProjectMeta(currentProjectState) || (doc.createdBy && doc.createdBy === currentUser?.userId));
         const canManageProjectDocBinding = doc.sourceType === 'project-doc' && canEditProjectMeta(currentProjectState);
+        const docPreviewRef = encodeDocumentPreviewRef(doc, currentProjectId);
+        const editorSourceId = escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId);
+        const bindingDocId = escapeHtml(`${currentProjectId}:project-doc:${doc.docId}`);
         return `
         <div class="doc-card bg-surface-container-low rounded-xl p-4">
           <div class="flex items-center justify-between mb-3">
@@ -31817,17 +32112,64 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           <div class="flex items-center justify-between text-xs">
             <span class="text-gray-500">${formatFileSize(doc.size || 0)}</span>
             <div class="doc-hover-actions flex items-center gap-2 flex-wrap">
-              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreviewByRef('${encodeDocumentPreviewRef(doc, currentProjectId)}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
-              ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button onclick="openProjectDocumentEditor('${doc.sourceType}','${escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId)}',${Number(doc.attachmentIndex ?? -1)})" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier">Modifier</button>` : ''}
-              <button onclick="downloadDocumentByRef('${encodeDocumentPreviewRef(doc, currentProjectId)}')" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger">Télécharger</button>
-              ${canManageProjectDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(`${currentProjectId}:project-doc:${doc.docId}`)}')" class="workspace-action-inline" data-action-kind="manage" data-action-label="Gérer">Gérer</button>` : ''}
-              ${canDeleteTaskDoc ? `<button onclick="removeAttachment('${doc.taskId}', ${doc.attachmentIndex})" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer">Supprimer</button>` : ''}
-              ${canDeleteProjectDoc ? `<button onclick="deleteProjectDocument('${doc.docId}')" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer">Supprimer</button>` : ''}
+              ${isDocumentPreviewable(doc) ? `<button type="button" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu" data-doc-action="${DOC_ACTION.PREVIEW}" data-doc-ref="${escapeHtml(docPreviewRef)}">Aperçu</button>` : ''}
+              ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button type="button" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier" data-doc-action="${DOC_ACTION.EDIT}" data-doc-source-type="${escapeHtml(doc.sourceType)}" data-doc-source-id="${editorSourceId}" data-doc-attachment-index="${Number(doc.attachmentIndex ?? -1)}">Modifier</button>` : ''}
+              <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" data-doc-action="${DOC_ACTION.DOWNLOAD}" data-doc-ref="${escapeHtml(docPreviewRef)}">Télécharger</button>
+              ${canManageProjectDocBinding ? `<button type="button" class="workspace-action-inline" data-action-kind="manage" data-action-label="Gérer" data-doc-action="${DOC_ACTION.MANAGE_BINDING}" data-doc-binding-id="${bindingDocId}">Gérer</button>` : ''}
+              ${canDeleteTaskDoc ? `<button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer" data-doc-action="${DOC_ACTION.DELETE_TASK_ATTACHMENT}" data-doc-task-id="${escapeHtml(doc.taskId)}" data-doc-attachment-index="${Number(doc.attachmentIndex ?? -1)}">Supprimer</button>` : ''}
+              ${canDeleteProjectDoc ? `<button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer" data-doc-action="${DOC_ACTION.DELETE_PROJECT_DOCUMENT}" data-doc-id="${escapeHtml(doc.docId)}">Supprimer</button>` : ''}
             </div>
           </div>
         </div>
       `;
       }).join('');
+      if (!container.__taskMdaProjectDocsDelegationBound) {
+        container.addEventListener('click', (event) => {
+          const btn = event.target instanceof Element ? event.target.closest('[data-doc-action]') : null;
+          if (!btn) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const action = String(btn.getAttribute('data-doc-action') || '').trim();
+          if (!action) return;
+          if (action === DOC_ACTION.OPEN_NOTE_REFERENCE) {
+            const noteId = String(btn.getAttribute('data-doc-note-id') || '').trim();
+            if (noteId) openProjectNoteFromDocument(noteId);
+            return;
+          }
+          if (action === DOC_ACTION.PREVIEW || action === DOC_ACTION.DOWNLOAD) {
+            const ref = String(btn.getAttribute('data-doc-ref') || '').trim();
+            if (!ref) return;
+            if (action === DOC_ACTION.PREVIEW) openDocumentPreviewByRef(ref);
+            else downloadDocumentByRef(ref);
+            return;
+          }
+          if (action === DOC_ACTION.EDIT) {
+            const sourceType = String(btn.getAttribute('data-doc-source-type') || '').trim();
+            const sourceId = String(btn.getAttribute('data-doc-source-id') || '').trim();
+            const attachmentIndex = Number.parseInt(String(btn.getAttribute('data-doc-attachment-index') || '-1'), 10);
+            if (!sourceType || !sourceId) return;
+            openProjectDocumentEditor(sourceType, sourceId, Number.isNaN(attachmentIndex) ? -1 : attachmentIndex);
+            return;
+          }
+          if (action === DOC_ACTION.MANAGE_BINDING) {
+            const bindingId = String(btn.getAttribute('data-doc-binding-id') || '').trim();
+            if (bindingId) openDocumentBindingModal(bindingId);
+            return;
+          }
+          if (action === DOC_ACTION.DELETE_TASK_ATTACHMENT) {
+            const taskId = String(btn.getAttribute('data-doc-task-id') || '').trim();
+            const attachmentIndex = Number.parseInt(String(btn.getAttribute('data-doc-attachment-index') || '-1'), 10);
+            if (!taskId || Number.isNaN(attachmentIndex)) return;
+            removeAttachment(taskId, attachmentIndex);
+            return;
+          }
+          if (action === DOC_ACTION.DELETE_PROJECT_DOCUMENT) {
+            const docId = String(btn.getAttribute('data-doc-id') || '').trim();
+            if (docId) deleteProjectDocument(docId);
+          }
+        });
+        container.__taskMdaProjectDocsDelegationBound = true;
+      }
     }
 
     async function renderActivity(events) {
@@ -31986,25 +32328,72 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             const safeHref = sanitizeDownloadHref(att.data || '', String(att.type || ''));
             const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
             const sizeLabel = formatFileSize(Number(att.size || 0));
-            const isDownloadable = Boolean(safeHref);
-            return `
-              <a href="${href}" ${isDownloadable ? `download="${escapeHtml(rawName)}"` : ''} class="message-attachment-chip ${isImage ? 'is-image' : 'is-file'} ${isDownloadable ? '' : 'opacity-60 pointer-events-none'}">
-                ${isImage ? `
-                  <span class="message-attachment-thumb">
-                    <img src="${href}" alt="${label}" loading="lazy">
+            const hasStoragePath = String(att.storagePath || '').trim().length > 0;
+            const isDownloadable = Boolean(safeHref) || hasStoragePath;
+            const preview = safeHref && isImage
+              ? `
+                <span class="message-attachment-thumb">
+                  <img src="${href}" alt="${label}" loading="lazy">
+                </span>
+              `
+              : `
+                <span class="material-symbols-outlined text-base">attach_file</span>
+              `;
+            if (safeHref) {
+              return `
+                <a href="${href}" download="${escapeHtml(rawName)}" class="message-attachment-chip ${isImage ? 'is-image' : 'is-file'}">
+                  ${preview}
+                  <span class="message-attachment-meta">
+                    <span class="message-attachment-name">${label}</span>
+                    <span class="message-attachment-size">${escapeHtml(sizeLabel)}</span>
                   </span>
-                ` : `
-                  <span class="material-symbols-outlined text-base">attach_file</span>
-                `}
+                </a>
+              `;
+            }
+            return `
+              <button
+                type="button"
+                class="message-attachment-chip ${isImage ? 'is-image' : 'is-file'} ${isDownloadable ? '' : 'opacity-60 pointer-events-none'}"
+                data-storage-attachment-open="1"
+                data-storage-path="${escapeHtml(String(att.storagePath || ''))}"
+                data-storage-name="${escapeHtml(rawName)}"
+                data-storage-type="${escapeHtml(String(att.type || 'application/octet-stream'))}"
+                ${isDownloadable ? '' : 'disabled'}
+              >
+                ${preview}
                 <span class="message-attachment-meta">
                   <span class="message-attachment-name">${label}</span>
                   <span class="message-attachment-size">${escapeHtml(sizeLabel)}</span>
                 </span>
-              </a>
+              </button>
             `;
           }).join('')}
         </div>
       `;
+    }
+
+    async function openStoredAttachmentFromPath(storagePath = '', fileName = 'fichier', mimeType = 'application/octet-stream') {
+      const path = String(storagePath || '').trim();
+      if (!path || !sharedFolderHandle || !window.TaskMDADocumentStorage?.readDataUrl) {
+        showToast('Fichier indisponible');
+        return;
+      }
+      try {
+        const dataUrl = await window.TaskMDADocumentStorage.readDataUrl(sharedFolderHandle, path, String(mimeType || 'application/octet-stream'));
+        const safeHref = sanitizeDownloadHref(dataUrl, String(mimeType || 'application/octet-stream'));
+        if (!safeHref) {
+          showToast('Fichier illisible');
+          return;
+        }
+        const a = document.createElement('a');
+        a.href = safeHref;
+        a.download = String(fileName || 'fichier');
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (_) {
+        showToast('Impossible de lire le fichier');
+      }
     }
 
     function ensureMessageRowActionsVisible(containerId, rowId, options = {}) {
@@ -32717,6 +33106,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       });
       addNotification('Document', `${files.length} document(s) ajoute(s)`, currentProjectId);
       showToast('Document(s) ajoute(s)');
+      closeProjectDocUploadModal();
       await showProjectDetail(currentProjectId);
     }
 
@@ -33092,8 +33482,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           applyProjectSubnavLayout,
           getGlobalDocsUploadCollapsed: () => globalDocsUploadCollapsed,
           setGlobalDocsUploadCollapsed,
-          getProjectDocsUploadCollapsed: () => projectDocsUploadCollapsed,
-          setProjectDocsUploadCollapsed,
           onCreateProjectFromSidebar: () => {
             document.getElementById('btn-create-project')?.click();
           },
@@ -33797,7 +34185,13 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           estimateDataUrlBytes,
           showToast,
           escapeHtml,
-          insertHtmlAtCursor
+          insertHtmlAtCursor,
+          getSharedFolderHandle: () => sharedFolderHandle,
+          getCurrentProjectId: () => currentProjectId,
+          getCurrentTaskTheme: () => {
+            const fromInput = String(document.getElementById('task-theme')?.value || '').trim();
+            return fromInput || 'General';
+          }
         })
       : null;
 
@@ -34698,8 +35092,11 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     document.getElementById('btn-close-global-doc-upload-modal')?.addEventListener('click', () => {
       closeGlobalDocUploadModal();
     });
-    document.getElementById('btn-toggle-project-docs-upload')?.addEventListener('click', () => {
-      setProjectDocsUploadCollapsed(!projectDocsUploadCollapsed);
+    document.getElementById('btn-open-project-doc-upload-modal')?.addEventListener('click', () => {
+      openProjectDocUploadModal();
+    });
+    document.getElementById('btn-close-project-doc-upload-modal')?.addEventListener('click', () => {
+      closeProjectDocUploadModal();
     });
     document.getElementById('btn-toggle-project-description')?.addEventListener('click', () => {
       const wasExpanded = projectDescriptionExpanded;
@@ -35443,11 +35840,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     document.getElementById('profile-photo-input')?.addEventListener('change', async (e) => {
       const file = e?.target?.files?.[0];
       if (!file) return;
-      if (file.size > 2 * 1024 * 1024) {
-        showToast('Image trop lourde (max 2 Mo)');
-        e.target.value = '';
-        return;
-      }
       try {
         pendingProfilePhotoDataUrl = await fileToDataUrl(file);
         pendingProfilePhotoDirty = true;
@@ -36516,6 +36908,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     registerSafeBackdropClose('modal-global-doc-upload', () => {
       closeGlobalDocUploadModal();
     });
+    registerSafeBackdropClose('modal-project-doc-upload', () => {
+      closeProjectDocUploadModal();
+    });
     registerSafeBackdropClose('modal-doc-editor', () => {
       closeDocumentEditorModal();
     });
@@ -36566,6 +36961,17 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     document.addEventListener('fullscreenchange', () => {
       syncProjectWorkFocusButton();
+    });
+    document.addEventListener('click', (event) => {
+      const btn = event?.target instanceof Element
+        ? event.target.closest('[data-storage-attachment-open="1"]')
+        : null;
+      if (!btn) return;
+      event.preventDefault();
+      const storagePath = String(btn.getAttribute('data-storage-path') || '').trim();
+      const fileName = String(btn.getAttribute('data-storage-name') || '').trim() || 'fichier';
+      const mimeType = String(btn.getAttribute('data-storage-type') || 'application/octet-stream').trim() || 'application/octet-stream';
+      void openStoredAttachmentFromPath(storagePath, fileName, mimeType);
     });
     registerSafeBackdropClose('modal-message-image-preview', () => {
       closeMessageImagePreview();
