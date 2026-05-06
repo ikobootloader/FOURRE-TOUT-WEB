@@ -963,6 +963,25 @@ html.dark .feed-mention {
   color: #1f4ea3;
 }
 
+.global-feed-attachments-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.global-feed-attachments-badge .material-symbols-outlined {
+  font-size: 16px;
+  line-height: 1;
+}
+
 @media (max-width: 1200px) {
   .feed-layout {
     display: flex;
@@ -1036,6 +1055,12 @@ html.dark .feed-mention-counter.is-active {
   border-color: rgba(122, 162, 255, 0.5);
   background: rgba(122, 162, 255, 0.18);
   color: #d4e5ff;
+}
+
+html.dark .global-feed-attachments-badge {
+  border-color: #335b91;
+  background: #152947;
+  color: #d9e8ff;
 }
 
 html.dark .feed-item {
@@ -4500,6 +4525,163 @@ html.dark .project-description.is-collapsed::after {
 .project-description-editor li,
 .markdown-content li {
   margin: 0.2em 0;
+}
+
+:root {
+  --code-inline-bg: linear-gradient(180deg, #f8fafc, #eef2ff);
+  --code-inline-color: #0f3f85;
+  --code-inline-border: #bcd0ff;
+  --code-inline-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(29, 78, 216, 0.08);
+  --code-block-border: #1d2a44;
+  --code-block-accent: #3b82f6;
+  --code-block-bg:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(148, 163, 184, 0.07) 0px,
+      rgba(148, 163, 184, 0.07) 1px,
+      transparent 1px,
+      transparent 24px
+    );
+  --code-block-color: #dbe8ff;
+  --code-block-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 20px rgba(2, 6, 23, 0.22);
+}
+
+html.dark {
+  --code-inline-bg: linear-gradient(180deg, #17284a, #10203d);
+  --code-inline-color: #d9e8ff;
+  --code-inline-border: #325588;
+  --code-inline-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(7, 17, 34, 0.45);
+  --code-block-border: #2a3f62;
+  --code-block-accent: #60a5fa;
+  --code-block-bg:
+    linear-gradient(180deg, rgba(8, 19, 38, 0.98), rgba(5, 12, 26, 0.98)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(96, 165, 250, 0.06) 0px,
+      rgba(96, 165, 250, 0.06) 1px,
+      transparent 1px,
+      transparent 24px
+    );
+  --code-block-color: #dbe8ff;
+  --code-block-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 22px rgba(2, 6, 23, 0.4);
+}
+
+body.code-theme-github {
+  --code-inline-bg: #f6f8fa;
+  --code-inline-color: #1f2328;
+  --code-inline-border: #d0d7de;
+  --code-inline-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --code-block-border: #d0d7de;
+  --code-block-accent: #2f81f7;
+  --code-block-bg: #0d1117;
+  --code-block-color: #c9d1d9;
+  --code-block-shadow: 0 8px 18px rgba(1, 4, 9, 0.2);
+}
+
+html.dark body.code-theme-github {
+  --code-inline-bg: #21262d;
+  --code-inline-color: #e6edf3;
+  --code-inline-border: #30363d;
+  --code-inline-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --code-block-border: #30363d;
+  --code-block-accent: #58a6ff;
+  --code-block-bg: #0d1117;
+  --code-block-color: #c9d1d9;
+  --code-block-shadow: 0 10px 18px rgba(1, 4, 9, 0.42);
+}
+
+body.code-theme-vscode {
+  --code-inline-bg: linear-gradient(180deg, #edf5ff, #e3efff);
+  --code-inline-color: #0b3d91;
+  --code-inline-border: #9fc2ff;
+  --code-inline-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 3px rgba(37, 99, 235, 0.12);
+  --code-block-border: #173056;
+  --code-block-accent: #4fc1ff;
+  --code-block-bg:
+    linear-gradient(180deg, rgba(18, 32, 56, 0.98), rgba(14, 24, 41, 0.98)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(79, 193, 255, 0.065) 0px,
+      rgba(79, 193, 255, 0.065) 1px,
+      transparent 1px,
+      transparent 24px
+    );
+  --code-block-color: #d6e9ff;
+  --code-block-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 24px rgba(7, 12, 22, 0.28);
+}
+
+html.dark body.code-theme-vscode {
+  --code-inline-bg: linear-gradient(180deg, #1b2f4f, #132640);
+  --code-inline-color: #d9ebff;
+  --code-inline-border: #335d90;
+  --code-inline-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(7, 17, 34, 0.45);
+  --code-block-border: #2a4a75;
+  --code-block-accent: #56b6ff;
+  --code-block-bg:
+    linear-gradient(180deg, rgba(8, 19, 38, 0.98), rgba(5, 12, 26, 0.98)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(86, 182, 255, 0.07) 0px,
+      rgba(86, 182, 255, 0.07) 1px,
+      transparent 1px,
+      transparent 24px
+    );
+  --code-block-color: #dbe8ff;
+  --code-block-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 22px rgba(2, 6, 23, 0.4);
+}
+
+.project-description-editor code,
+.project-description-editor .ql-editor code,
+.task-detail-inline-quill-host .ql-editor code,
+.markdown-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: var(--code-inline-bg);
+  color: var(--code-inline-color);
+  border: 1px solid var(--code-inline-border);
+  border-radius: 7px;
+  padding: 0.1em 0.42em;
+  box-shadow: var(--code-inline-shadow);
+  white-space: break-spaces;
+  overflow-wrap: anywhere;
+}
+
+.project-description-editor pre,
+.project-description-editor .ql-editor pre,
+.project-description-editor .ql-editor pre.ql-syntax,
+.task-detail-inline-quill-host .ql-editor pre,
+.task-detail-inline-quill-host .ql-editor pre.ql-syntax,
+.markdown-content pre {
+  margin: 0.72em 0;
+  padding: 0.86em 0.98em;
+  border-radius: 12px;
+  border: 1px solid var(--code-block-border);
+  border-left: 4px solid var(--code-block-accent);
+  background: var(--code-block-bg);
+  color: var(--code-block-color);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  line-height: 1.62;
+  overflow-x: auto;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  box-shadow: var(--code-block-shadow);
+}
+
+.project-description-editor pre code,
+.project-description-editor .ql-editor pre code,
+.task-detail-inline-quill-host .ql-editor pre code,
+.markdown-content pre code {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0;
+  white-space: inherit;
 }
 
 .project-description-editor:focus {
@@ -9845,6 +10027,39 @@ html[data-wf-action-buttons="icon"] .discussion-action-icon-btn .taskmda-action-
   color: #d7e6ff;
 }
 
+.task-title-context-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 220px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-title-context-menu button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+}
+
+.task-title-context-menu button:hover,
+.task-title-context-menu button:focus-visible {
+  background: #eff6ff;
+  color: #1d4ed8;
+  outline: none;
+}
+
 .doc-editor-markdown-tools {
   display: flex;
   flex-wrap: wrap;
@@ -10907,6 +11122,22 @@ html.dark .message-attachment-chip {
 
 html.dark .message-attachment-chip:hover {
   background: #23385a;
+}
+
+html.dark .task-title-context-menu {
+  border-color: #35507b;
+  background: #13223d;
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.5);
+}
+
+html.dark .task-title-context-menu button {
+  color: #d7e7ff;
+}
+
+html.dark .task-title-context-menu button:hover,
+html.dark .task-title-context-menu button:focus-visible {
+  background: rgba(77, 119, 215, 0.22);
+  color: #ffffff;
 }
 
 html.dark .message-attachment-size {
@@ -13847,4 +14078,36 @@ html.dark .export-menu-item .material-symbols-outlined {
   outline: 2px solid rgba(37, 99, 235, 0.32);
   outline-offset: 2px;
   border-radius: 8px;
+}
+
+/* Read modals: prevent text/content overflow outside modal frame */
+#modal-project-note-read .task-detail-modal-panel,
+#modal-global-read .project-note-modal-panel,
+#modal-doc-preview > div {
+  overflow-x: hidden;
+}
+
+#project-note-read-content,
+#global-read-content,
+#doc-preview-content {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#project-note-read-content *,
+#global-read-content *,
+#doc-preview-content * {
+  max-width: 100%;
+}
+
+#project-note-read-content pre,
+#global-read-content pre,
+#doc-preview-content pre,
+#project-note-read-content code,
+#global-read-content code,
+#doc-preview-content code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }

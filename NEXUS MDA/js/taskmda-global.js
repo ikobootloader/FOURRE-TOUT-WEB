@@ -368,6 +368,12 @@
         await actions.renderGlobalNotes?.();
       });
 
+      document.getElementById('global-notes-origin-filter')?.addEventListener('change', async () => {
+        state.setOriginFilter?.(String(document.getElementById('global-notes-origin-filter')?.value || 'all').trim() || 'all');
+        state.setPage?.(1);
+        await actions.renderGlobalNotes?.();
+      });
+
       document.getElementById('global-notes-sort')?.addEventListener('change', async () => {
         state.setSortMode?.(String(document.getElementById('global-notes-sort')?.value || 'recent').trim() || 'recent');
         state.setPage?.(1);
@@ -1081,21 +1087,15 @@
         return;
       }
 
-      const maxFileSize = 8 * 1024 * 1024;
+      let insertedCount = 0;
       await actions.runWithLoading?.(async () => {
-        for (const rawFile of files) {
-          if (rawFile.size > maxFileSize) {
-            helpers.showToast?.(`Le fichier ${rawFile.name} dépasse 8 Mo`);
-            return;
-          }
-        }
-
         const docs = await actions.readDocumentFilesFromInput?.('global-doc-files', {
           projectId: 'global',
           scope: 'global',
           rubric: 'global-doc-upload',
           theme
         });
+        if (!Array.isArray(docs) || docs.length === 0) return;
         for (const file of (docs || [])) {
           await actions.putEncrypted?.('globalDocs', {
             id: helpers.uuidv4?.(),
@@ -1111,6 +1111,7 @@
             sharingMode: helpers.normalizeSharingMode?.(sharingMode, 'private') || 'private',
             createdAt: Date.now()
           }, 'id');
+          insertedCount += 1;
         }
 
         if (filesInput) filesInput.value = '';
@@ -1119,8 +1120,12 @@
         const label = document.getElementById('global-doc-files-label');
         if (label) label.textContent = 'Aucun fichier choisi';
       });
+      if (insertedCount <= 0) {
+        helpers.showToast?.('Aucun document n a été versé');
+        return;
+      }
       helpers.showToast?.('Documents hors projet ajoutés');
-      actions.addNotification?.('Documents', `${files.length} document(s) hors projet ajouté(s)`, null);
+      actions.addNotification?.('Documents', `${insertedCount} document(s) hors projet ajouté(s)`, null);
       closeGlobalDocUploadModal();
       await actions.renderGlobalDocs?.();
     }
@@ -1202,7 +1207,7 @@
       actions.refreshGlobalDocumentThemePicker?.(safeAll, safeStates);
 
       const searchInputValue = String(document.getElementById('global-doc-search')?.value || '').trim();
-      const q = `${helpers.getGlobalSearchQuery?.() || ''} ${searchInputValue}`.trim();
+      const q = searchInputValue;
       const themeFilter = String(document.getElementById('global-doc-theme-filter')?.value || '');
       const filtered = safeAll
         .filter((doc) => helpers.matchesQuery?.([doc.name, doc.sourceProjectName, doc.theme, doc.type, helpers.sharingModeLabel?.(doc.sharingMode)], q))
@@ -1417,7 +1422,14 @@
       } else {
         content = String(input.value || '').trim();
       }
-      content = actions.applyProfanityFilterToHtml?.(content) || content;
+      const contentWithoutInlineDocBlocks = actions.stripInlineAttachedDocumentBlocksFromHtml?.(content) || content;
+      content = actions.applyProfanityFilterToHtml?.(contentWithoutInlineDocBlocks) || contentWithoutInlineDocBlocks;
+      if (!content) {
+        const linkedDraftCount = Array.from(new Set(state.getGlobalFeedLinkedDocIdsDraft?.() || [])).length;
+        if (linkedDraftCount > 0) {
+          content = '<p>Document(s) joint(s)</p>';
+        }
+      }
       if (!content) {
         helpers.showToast?.('Le post est vide');
         return;
@@ -1426,6 +1438,11 @@
       const mentionCatalog = await actions.buildGlobalMentionCatalog?.();
       const textToScan = quill ? (quill.getText() || '') : content;
       const mentions = Array.from(actions.extractMentionedUserIdsFromText?.(textToScan, mentionCatalog) || []);
+      const linkedDocIdsFromContent = Array.from(new Set(
+        actions.extractLinkedGlobalDocIdsFromHtml?.(String(content || '')) || []
+      ));
+      const linkedDocIdsFromDraft = Array.from(new Set(state.getGlobalFeedLinkedDocIdsDraft?.() || []));
+      const linkedDocIds = Array.from(new Set([...linkedDocIdsFromContent, ...linkedDocIdsFromDraft]));
       const refs = [];
       if (projectSelect.value) {
         const opt = projectSelect.options[projectSelect.selectedIndex];
@@ -1444,10 +1461,12 @@
       if (editingId) {
         const existing = await actions.getGlobalPostById?.(editingId);
         if (existing) {
+          const existingLinkedDocIds = Array.isArray(existing.linkedDocIds) ? existing.linkedDocIds : [];
           existing.title = title;
           existing.content = actions.applyProfanityFilterToHtml?.(content) || content;
           existing.mentions = mentions;
           existing.refs = refs;
+          existing.linkedDocIds = Array.from(new Set([...existingLinkedDocIds, ...linkedDocIds]));
           existing.summaryWordCount = actions.getFeedSummaryWordCount?.();
           existing.summary = actions.computeGlobalFeedPostAutoSummary?.(existing, existing.summaryWordCount) || '';
           existing.updatedAt = Date.now();
@@ -1464,6 +1483,7 @@
           calendarSelect.value = '';
           await actions.updateGlobalFeedMentionCounter?.();
           await actions.renderGlobalFeed?.();
+          actions.resetGlobalFeedLinkedDocIdsDraft?.();
           if (state.getSharedFolderHandle?.()) {
             actions.writeGlobalFeedPostToSharedFolder?.(existing);
           }
@@ -1480,6 +1500,7 @@
         authorName: String(currentUser?.name || actions.fallbackDirectoryName?.(currentUser?.userId || '')),
         title,
         content,
+        linkedDocIds,
         mentions,
         refs,
         summaryWordCount: actions.getFeedSummaryWordCount?.(),
@@ -1500,6 +1521,7 @@
       calendarSelect.value = '';
       await actions.updateGlobalFeedMentionCounter?.();
       await actions.renderGlobalFeed?.();
+      actions.resetGlobalFeedLinkedDocIdsDraft?.();
       if (state.getSharedFolderHandle?.()) {
         actions.writeGlobalFeedPostToSharedFolder?.(post);
       }
@@ -1670,11 +1692,17 @@
       const linkedDocIdsFromContent = new Set(
         actions.extractLinkedGlobalDocIdsFromHtml?.(String(post?.content || '')) || []
       );
+      const linkedDocIdsFromPost = new Set(
+        (Array.isArray(post?.linkedDocIds) ? post.linkedDocIds : [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      );
       const standaloneDocs = (Array.isArray(allGlobalDocs) ? allGlobalDocs : [])
         .filter((doc) => {
           const docId = String(doc?.id || '').trim();
           if (!docId) return false;
           if (linkedDocIdsFromContent.has(docId)) return true;
+          if (linkedDocIdsFromPost.has(docId)) return true;
           const noteIds = Array.isArray(doc?.linkedNoteIds) ? doc.linkedNoteIds : [];
           return noteIds.some((noteId) => linkedGlobalNoteIds.has(String(noteId || '').trim()));
         })
@@ -1927,7 +1955,11 @@
       document.getElementById('global-feed-attach-doc-files')?.addEventListener('change', async (event) => {
         const files = Array.from(event?.target?.files || []);
         if (!files.length) return;
-        await actions.importDocumentsIntoGlobalFeedEditor?.();
+        const result = await actions.importDocumentsIntoGlobalFeedEditor?.();
+        const createdDocIds = Array.isArray(result?.createdDocIds) ? result.createdDocIds : [];
+        if (createdDocIds.length) {
+          actions.addGlobalFeedLinkedDocIdsDraft?.(createdDocIds);
+        }
       });
     }
 
@@ -2227,4 +2259,3 @@
     createModule
   };
 }(window));
-

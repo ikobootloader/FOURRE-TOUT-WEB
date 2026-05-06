@@ -913,6 +913,9 @@
           ? String(ctx.actionsRenderer(note, { canManage, isArchived, linkedDocsCount, linkedTaskIdsCount: linkedTaskIds.length }) || '')
           : '')
       : '';
+    const extraBadgesHtml = typeof ctx.extraBadgesRenderer === 'function'
+      ? String(ctx.extraBadgesRenderer(note) || '')
+      : '';
 
     return `
       <article
@@ -929,6 +932,7 @@
               ${Number(note.favoriteAt || 0) > 0 ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold">Favori</span>' : ''}
               ${linkedTaskIds.length > 0 ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${linkedTaskIds.length} tache(s) liee(s)</span>` : ''}
               ${linkedDocsCount > 0 ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">${linkedDocsCount} document(s) lie(s)</span>` : ''}
+              ${extraBadgesHtml}
             </div>
             <h4 class="mt-2 text-base font-bold text-slate-800">${escapeHtml(note.title || 'Note sans titre')}</h4>
             <p class="mt-1 text-xs text-slate-500">${escapeHtml(String(ctx.authorById.get(String(note.createdBy || '')) || note.createdByName || 'Auteur'))} • ${escapeHtml(formatDateTime(note.createdAt))}</p>
@@ -1018,7 +1022,8 @@
       cardIdPrefix: options.cardIdPrefix || 'project-note',
       openFn: options.openFn || 'openProjectNoteReadModal',
       actionsRenderer: options.actionsRenderer,
-      showTaskLinks: options.showTaskLinks
+      showTaskLinks: options.showTaskLinks,
+      extraBadgesRenderer: options.extraBadgesRenderer
     })).join('');
     return { total: notes.length, visible: visible.length };
   }

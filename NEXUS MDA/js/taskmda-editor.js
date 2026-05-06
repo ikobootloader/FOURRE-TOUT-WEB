@@ -490,6 +490,14 @@
           case 'ol':
             quill.format('list', currentFormats.list === 'ordered' ? false : 'ordered');
             return;
+          case 'code':
+            quill.format('code', !currentFormats.code);
+            return;
+          case 'code-block': {
+            const nextValue = currentFormats['code-block'] ? false : true;
+            quill.format('code-block', nextValue);
+            return;
+          }
           case 'emoji': {
             const emoji = pickProjectEditorEmoji();
             if (emoji) {
@@ -552,6 +560,15 @@
         case 'ol':
           document.execCommand('insertOrderedList', false, null);
           break;
+        case 'code':
+          document.execCommand('insertHTML', false, '<code>' + escapeHtml(String(window.getSelection?.()?.toString?.() || '')) + '</code>');
+          break;
+        case 'code-block': {
+          const selectedText = String(window.getSelection?.()?.toString?.() || '').trim();
+          const payload = selectedText ? escapeHtml(selectedText) : 'Code...';
+          insertHtmlAtCursor(`<pre><code>${payload}</code></pre><p><br></p>`);
+          break;
+        }
         case 'emoji': {
           const emoji = pickProjectEditorEmoji();
           if (emoji) document.execCommand('insertText', false, emoji);
@@ -603,6 +620,7 @@
             [{ header: [1, 2, 3, false] }],
             ['bold', 'italic', 'underline', 'blockquote'],
             [{ list: 'ordered' }, { list: 'bullet' }],
+            ['code', 'code-block'],
             [{ align: [] }],
             [{ background: [] }],
             ['link', 'image', 'video', 'emoji', 'digest', 'clean']

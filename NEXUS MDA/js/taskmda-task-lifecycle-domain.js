@@ -65,6 +65,21 @@
       if (typeof state.setPendingTaskConvertRef === 'function') state.setPendingTaskConvertRef(value || null);
     }
 
+    function normalizeTaskThemeValue(rawValue, fallback = 'General') {
+      if (typeof opts.normalizeTaskThemeValue === 'function') {
+        return opts.normalizeTaskThemeValue(rawValue, fallback);
+      }
+      const tokens = String(rawValue || '')
+        .split(/[;\n,|]+/g)
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+      const unique = Array.from(new Set(tokens.map((token) => token.toLowerCase())))
+        .map((lower) => tokens.find((token) => token.toLowerCase() === lower))
+        .filter(Boolean);
+      if (!unique.length) return String(fallback || 'General').trim() || 'General';
+      return unique.join('; ');
+    }
+
     async function openProjectTaskCreateModalWithStatus(status) {
       opts.trackUxMetric?.('openNewTaskProject');
       setStandaloneTaskMode(false);
@@ -434,6 +449,7 @@
       const taskDescriptionText = String(opts.getProjectDescriptionPlainText?.(taskDescriptionHtml) || '').trim();
       const taskDeadline = opts.readTaskDeadlineFromForm?.() || {};
 
+      const normalizedTheme = normalizeTaskThemeValue(document.getElementById('task-theme')?.value || '', 'General');
       const payload = {
         title,
         assignee: primaryAssignee.name || '',
@@ -451,7 +467,7 @@
         deadlineEnd: taskDeadline.deadlineEnd,
         status: document.getElementById('task-status')?.value || 'todo',
         urgency: document.getElementById('task-urgency')?.value || 'medium',
-        theme: String(document.getElementById('task-theme')?.value || '').trim(),
+        theme: normalizedTheme,
         groupId: resolvedGroupId || null,
         groupName: resolvedGroupName || null,
         featureId: standaloneTaskMode ? null : (String(document.getElementById('task-feature')?.value || '').trim() || null),
@@ -510,7 +526,7 @@
           attachments: attachments.length > 0
             ? ([...(existingStandalone?.attachments || []), ...attachments])
             : (existingStandalone?.attachments || payload.attachments || []),
-          theme: payload.theme || String(document.getElementById('global-task-theme-known')?.value || '').trim() || 'General',
+          theme: normalizeTaskThemeValue(payload.theme || document.getElementById('global-task-theme-known')?.value || '', 'General'),
           groupId: payload.groupId || null,
           groupName: payload.groupName || null,
           featureId: null,

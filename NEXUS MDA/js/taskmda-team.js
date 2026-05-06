@@ -967,7 +967,7 @@
           id: null
         });
         refs.push({ type: 'task', id: taskRef, label: `${taskTitle} • ${projectName}` });
-        content = `Nouvelle tâche créée: ${taskTitle}\nProjet: ${projectName}`;
+        content = taskTitle;
         autoKind = 'task-created';
       }
 
@@ -1030,14 +1030,14 @@
       window.TaskMDAHierarchy?.ensureStateShape?.(state);
       const themesToUpsert = [];
       const registerTheme = (rawTheme) => {
-        const theme = String(rawTheme || '').trim();
-        if (!theme) return;
-        if (!state.themes.find(t => normalizeSearch(t) === normalizeSearch(theme))) {
-          state.themes.push(theme);
-        }
-        if (!themesToUpsert.some(t => normalizeSearch(t) === normalizeSearch(theme))) {
-          themesToUpsert.push(theme);
-        }
+        extractThemeTokens(rawTheme).forEach((theme) => {
+          if (!state.themes.find(t => normalizeSearch(t) === normalizeSearch(theme))) {
+            state.themes.push(theme);
+          }
+          if (!themesToUpsert.some(t => normalizeSearch(t) === normalizeSearch(theme))) {
+            themesToUpsert.push(theme);
+          }
+        });
       };
 
       // Appliquer selon le type
@@ -1227,7 +1227,9 @@
           break;
 
         case EventTypes.REMOVE_THEME:
-          state.themes = state.themes.filter(t => normalizeSearch(t) !== normalizeSearch(event.payload.theme));
+          extractThemeTokens(event.payload.theme).forEach((removedTheme) => {
+            state.themes = state.themes.filter(t => normalizeSearch(t) !== normalizeSearch(removedTheme));
+          });
           break;
 
         case EventTypes.CREATE_DOCUMENT:
@@ -4593,6 +4595,34 @@
       }
       applyTheme(getStoredThemeChoice(), false);
     }
+
+    const EDITOR_CODE_THEME_STORAGE_KEY = 'taskmda_editor_code_theme';
+
+    function normalizeEditorCodeTheme(value) {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (normalized === 'github' || normalized === 'vscode') return normalized;
+      return 'github';
+    }
+
+    function applyEditorCodeTheme(theme, persist = true) {
+      const selected = normalizeEditorCodeTheme(theme);
+      document.body.classList.remove('code-theme-github', 'code-theme-vscode');
+      document.body.classList.add(`code-theme-${selected}`);
+      if (persist) {
+        localStorage.setItem(EDITOR_CODE_THEME_STORAGE_KEY, selected);
+      }
+      return selected;
+    }
+
+    function initEditorCodeTheme() {
+      const stored = localStorage.getItem(EDITOR_CODE_THEME_STORAGE_KEY);
+      return applyEditorCodeTheme(stored || 'github', false);
+    }
+
+    // Helper console/debug: window.setEditorCodeTheme('github'|'vscode')
+    window.setEditorCodeTheme = function setEditorCodeTheme(theme) {
+      return applyEditorCodeTheme(theme, true);
+    };
 
     let shellUiRuntime = null;
     let shellNotificationsRuntime = null;
@@ -8977,6 +9007,7 @@
     let messageFilters = { query: '', onlyMine: false };
     let globalNotesSearchQuery = '';
     let globalNotesScopeFilter = 'all';
+    let globalNotesOriginFilter = 'all';
     let globalNotesSortMode = 'recent';
     let globalNotesInlineDocsMigrationDone = false;
     let globalNotesTabMode = 'all';
@@ -15234,7 +15265,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           tagsInputId: 'global-note-tags',
           tags: '',
           visibilityInputId: 'global-note-transverse',
-          isVisible: true,
+          isVisible: false,
           shareInputId: 'global-note-share-feed',
           share: false,
           deleteBtnId: 'btn-global-note-delete',
@@ -15265,7 +15296,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         if (titleInput) titleInput.value = '';
         if (themeInput) themeInput.value = '';
         if (tagsInput) tagsInput.value = '';
-        if (transverseInput) transverseInput.checked = true;
+        if (transverseInput) transverseInput.checked = false;
         if (shareInput) shareInput.checked = false;
         if (deleteBtn) deleteBtn.classList.add('hidden');
         if (saveBtn) saveBtn.classList.remove('hidden');
@@ -15319,7 +15350,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           tagsInputId: 'global-note-tags',
           tags: stringifyProjectNoteTags(note?.tags || []),
           visibilityInputId: 'global-note-transverse',
-          isVisible: normalizeGlobalNoteVisibility(note?.visibility || 'transverse') === 'transverse',
+          isVisible: normalizeGlobalNoteVisibility(note?.visibility || 'private') === 'transverse',
           shareInputId: 'global-note-share-feed',
           share: note?.shareToGlobalFeed === true,
           deleteBtnId: 'btn-global-note-delete',
@@ -15337,7 +15368,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         if (titleInput) titleInput.value = String(note?.title || '');
         if (themeInput) themeInput.value = String(note?.theme || '');
         if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
-        if (transverseInput) transverseInput.checked = normalizeGlobalNoteVisibility(note?.visibility || 'transverse') === 'transverse';
+        if (transverseInput) transverseInput.checked = normalizeGlobalNoteVisibility(note?.visibility || 'private') === 'transverse';
         if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
       }
       await refreshGlobalNoteThemePicker();
@@ -15573,6 +15604,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             <button type="button" class="ql-strike" title="Barré"></button>
             <button type="button" class="ql-list" value="ordered" title="Liste numérotée"></button>
             <button type="button" class="ql-list" value="bullet" title="Liste à puces"></button>
+            <button type="button" class="ql-code" title="Code en ligne"></button>
+            <button type="button" class="ql-code-block" title="Bloc de code"></button>
             <button type="button" class="ql-link" title="Lien"></button>
             <button type="button" class="ql-clean" title="Nettoyer"></button>
           </div>
@@ -16179,6 +16212,50 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       `;
     }
 
+    function buildGlobalHubProjectNoteRef(projectId, noteId) {
+      const pid = encodeURIComponent(String(projectId || '').trim());
+      const nid = encodeURIComponent(String(noteId || '').trim());
+      return `project:${pid}:${nid}`;
+    }
+
+    function parseGlobalHubProjectNoteRef(refValue) {
+      const source = String(refValue || '').trim();
+      if (!source.startsWith('project:')) return null;
+      const payload = source.slice('project:'.length);
+      const sepIndex = payload.indexOf(':');
+      if (sepIndex <= 0) return null;
+      const pid = decodeURIComponent(payload.slice(0, sepIndex));
+      const nid = decodeURIComponent(payload.slice(sepIndex + 1));
+      if (!pid || !nid) return null;
+      return { projectId: pid, noteId: nid };
+    }
+
+    async function openGlobalHubAggregatedNoteRead(noteRef) {
+      const parsed = parseGlobalHubProjectNoteRef(noteRef);
+      if (!parsed) {
+        openGlobalNoteReadModal(String(noteRef || '').trim());
+        return;
+      }
+      await showProjectDetail(parsed.projectId, { resetScroll: false });
+      if (!currentProjectState?.project) {
+        showToast('Projet introuvable');
+        return;
+      }
+      const noteExists = getProjectNotesForState(currentProjectState).some(
+        (item) => String(item?.noteId || '').trim() === String(parsed.noteId || '').trim()
+      );
+      if (!noteExists) {
+        showToast('Note projet introuvable');
+        return;
+      }
+      setProjectView('notes');
+      projectNotesFocusNoteId = String(parsed.noteId || '').trim();
+      renderProjectNotes(currentProjectState);
+      setTimeout(() => {
+        openProjectNoteReadModal(parsed.noteId);
+      }, 40);
+    }
+
     async function renderGlobalNotes() {
       await migrateLegacyInlineGlobalNoteAttachmentsOnce();
       ensureGlobalNotesVerticalThemeLayout();
@@ -16203,21 +16280,64 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           linkedDocCountByNoteId.set(nid, Number(linkedDocCountByNoteId.get(nid) || 0) + 1);
         });
       });
-      const notes = (Array.isArray(allNotesRaw) ? allNotesRaw : []).filter((note) => !Number(note?.archivedAt || 0));
-      renderGlobalNotesThemeTabs(notes);
+      const notesGlobal = (Array.isArray(allNotesRaw) ? allNotesRaw : []).filter((note) => !Number(note?.archivedAt || 0));
+      const aggregatedProjectNotes = [];
       const me = String(currentUser?.userId || '').trim();
+      if (me) {
+        const projects = await getAllProjects();
+        const ownProjects = (Array.isArray(projects) ? projects : [])
+          .filter((project) => String(project?.createdBy || '').trim() === me);
+        for (const project of ownProjects) {
+          const projectId = String(project?.projectId || '').trim();
+          if (!projectId) continue;
+          const state = await getProjectState(projectId);
+          if (!state?.project) continue;
+          const projectName = String(state.project?.name || 'Projet').trim() || 'Projet';
+          const projectNotes = getProjectNotesForState(state).filter((note) => !Number(note?.archivedAt || 0));
+          projectNotes.forEach((note) => {
+            const sourceNoteId = String(note?.noteId || '').trim();
+            if (!sourceNoteId) return;
+            aggregatedProjectNotes.push({
+              ...note,
+              noteId: buildGlobalHubProjectNoteRef(projectId, sourceNoteId),
+              __origin: 'project',
+              __originProjectId: projectId,
+              __originProjectName: projectName,
+              __originNoteId: sourceNoteId
+            });
+          });
+        }
+      }
+      const notes = [
+        ...notesGlobal.map((note) => ({ ...note, __origin: 'global' })),
+        ...aggregatedProjectNotes
+      ];
+      renderGlobalNotesThemeTabs(notes);
       const queryNeedle = normalizeSearch(globalNotesSearchQuery);
       const filtered = notes
         .filter((note) => {
+          const noteOrigin = String(note?.__origin || 'global');
+          if (globalNotesOriginFilter === 'global' && noteOrigin !== 'global') return false;
+          if (globalNotesOriginFilter === 'project' && noteOrigin !== 'project') return false;
+          const isProjectOrigin = String(note?.__origin || '') === 'project';
+          if (isProjectOrigin) {
+            if (globalNotesScopeFilter !== 'all') return false;
+            if (globalNotesTabMode === 'private' || globalNotesTabMode === 'transverse') return false;
+            if (globalNotesTabMode === 'mine' && String(note.createdBy || '').trim() !== me) return false;
+            if (globalNotesTabMode === 'favorites' && Number(note.favoriteAt || 0) <= 0) return false;
+            if (globalNotesTabMode === 'published' && note.shareToGlobalFeed !== true) return false;
+          }
           const visibility = normalizeGlobalNoteVisibility(note.visibility);
-          if (visibility === 'private' && !isAppAdmin(currentUser?.userId) && String(note.createdBy || '').trim() !== me) return false;
-          if (globalNotesScopeFilter === 'private' && visibility !== 'private') return false;
-          if (globalNotesScopeFilter === 'transverse' && visibility !== 'transverse') return false;
-          if (globalNotesTabMode === 'mine' && String(note.createdBy || '').trim() !== me) return false;
-          if (globalNotesTabMode === 'favorites' && Number(note.favoriteAt || 0) <= 0) return false;
-          if (globalNotesTabMode === 'private' && visibility !== 'private') return false;
-          if (globalNotesTabMode === 'transverse' && visibility !== 'transverse') return false;
-          if (globalNotesTabMode === 'published' && note.shareToGlobalFeed !== true) return false;
+          if (!isProjectOrigin) {
+            if (visibility === 'private' && !isAppAdmin(currentUser?.userId) && String(note.createdBy || '').trim() !== me) return false;
+            if (globalNotesScopeFilter === 'private' && visibility !== 'private') return false;
+            if (globalNotesScopeFilter === 'transverse' && visibility !== 'transverse') return false;
+            if (globalNotesTabMode === 'mine' && String(note.createdBy || '').trim() !== me) return false;
+            if (globalNotesTabMode === 'favorites' && Number(note.favoriteAt || 0) <= 0) return false;
+            if (globalNotesTabMode === 'private' && visibility !== 'private') return false;
+            if (globalNotesTabMode === 'transverse' && visibility !== 'transverse') return false;
+            if (globalNotesTabMode === 'published' && note.shareToGlobalFeed !== true) return false;
+          }
           if (globalNotesThemeFilter !== 'all') {
             const match = getGlobalNoteThemeLabels(note).some(
               (label) => normalizeCatalogKey(label) === globalNotesThemeFilter
@@ -16265,7 +16385,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         const pagination = paginateItems(filtered, globalNotesPage, paginationConfig.globalNotesPerPage);
         globalNotesPage = pagination.currentPage;
         if (globalNotesBulkSelectionMode) {
-          host.innerHTML = pagination.pageItems.map((note) => {
+          host.innerHTML = pagination.pageItems
+            .filter((note) => String(note?.__origin || '') !== 'project')
+            .map((note) => {
             const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
             return buildGlobalNoteCardHtml(note, {
               canManage: canManageGlobalNote(note),
@@ -16274,7 +16396,17 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               isSelectedForBulkDelete: selectedGlobalNoteIdsForBulkDelete.has(String(note.noteId || '').trim()),
               linkedDocs: linkedDocsByNoteId.get(String(note.noteId || '').trim()) || []
             });
-          }).join('');
+            })
+            .join('');
+          if (!host.innerHTML) {
+            host.innerHTML = `
+              <div class="workspace-empty-state">
+                <span class="workspace-empty-icon material-symbols-outlined" aria-hidden="true">sticky_note_2</span>
+                <p class="workspace-empty-title">Aucune note globale sélectionnable</p>
+                <p class="workspace-empty-text">Les notes projet restent visibles hors mode sélection multiple.</p>
+              </div>
+            `;
+          }
         } else {
           const renderer = window.TaskMDAProjectNotes?.renderUnifiedNotesList;
           if (typeof renderer === 'function') {
@@ -16298,9 +16430,15 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               noteDocsCountById: linkedDocCountByNoteId,
               focusNoteId: String(globalNotesFocusNoteId || ''),
               cardIdPrefix: 'global-note',
-              openFn: 'openGlobalNoteReadModal',
+              openFn: 'openGlobalHubAggregatedNoteRead',
               showTaskLinks: false,
+              extraBadgesRenderer: (note) => {
+                if (String(note?.__origin || '') !== 'project') return '';
+                const label = `Projet: ${String(note?.__originProjectName || 'Projet')}`;
+                return `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-violet-100 text-violet-700 font-semibold">${escapeHtml(label)}</span>`;
+              },
               actionsRenderer: (note, actionCtx) => {
+                if (String(note?.__origin || '') === 'project') return '';
                 const noteId = escapeHtml(String(note?.noteId || ''));
                 if (!actionCtx?.canManage) return '';
                 return `
@@ -16326,6 +16464,19 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             });
           } else {
             host.innerHTML = pagination.pageItems.map((note) => {
+              if (String(note?.__origin || '') === 'project') {
+                const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
+                return `
+                  <article id="global-note-${escapeHtml(String(note.noteId || ''))}" class="global-note-card rounded-xl border border-slate-200 bg-white p-4 cursor-pointer" onclick="openGlobalHubAggregatedNoteRead('${escapeHtml(String(note.noteId || ''))}')">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                      <span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-violet-100 text-violet-700 font-semibold">Projet: ${escapeHtml(String(note.__originProjectName || 'Projet'))}</span>
+                      ${note.shareToGlobalFeed ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">Dans le fil</span>' : ''}
+                    </div>
+                    <h4 class="text-base font-bold text-slate-800">${escapeHtml(note.title || 'Note sans titre')}</h4>
+                    <p class="mt-1 text-xs text-slate-500">${escapeHtml(identity?.name || note.createdByName || fallbackDirectoryName(note.createdBy || ''))} • ${new Date(Number(note.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
+                  </article>
+                `;
+              }
               const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
               return buildGlobalNoteCardHtml(note, {
                 canManage: canManageGlobalNote(note),
@@ -19956,6 +20107,38 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       return out.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
     }
 
+    function extractThemeTokens(rawValue) {
+      return String(rawValue || '')
+        .split(/[;\n,|]+/g)
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+    }
+
+    function normalizeTaskThemeValue(rawValue, fallback = 'General') {
+      const tokens = uniqueThemeNames(extractThemeTokens(rawValue));
+      if (!tokens.length) return String(fallback || 'General').trim() || 'General';
+      return tokens.join('; ');
+    }
+
+    function renderTaskThemeChipsHtml(themeValue, options = {}) {
+      const themes = uniqueThemeNames(extractThemeTokens(themeValue));
+      if (!themes.length) return '';
+      const withLabel = options?.withLabel === true;
+      const maxBadgesRaw = Number.parseInt(String(options?.maxBadges ?? '3'), 10);
+      const maxBadges = Number.isFinite(maxBadgesRaw) && maxBadgesRaw > 0 ? maxBadgesRaw : 3;
+      const visibleThemes = themes.slice(0, maxBadges);
+      const hiddenCount = Math.max(0, themes.length - visibleThemes.length);
+      const badgesHtml = visibleThemes
+        .map((theme) => {
+          const label = withLabel ? `Thématique: ${theme}` : theme;
+          return `<span class="task-theme-chip">${escapeHtml(label)}</span>`;
+        })
+        .join('');
+      if (hiddenCount <= 0) return badgesHtml;
+      const overflowLabel = `+${hiddenCount}`;
+      return `${badgesHtml}<span class="task-theme-chip" title="${escapeHtml(`${hiddenCount} thématique(s) supplémentaire(s)`)}">${escapeHtml(overflowLabel)}</span>`;
+    }
+
     function fillThemePicker(selectId, inputId, themes, emptyLabel = 'Thématiques existantes...') {
       const select = document.getElementById(selectId);
       const input = document.getElementById(inputId);
@@ -19989,7 +20172,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const select = document.getElementById(selectId);
       const input = document.getElementById(inputId);
       if (!select || !input) return;
-      const inputKey = normalizeCatalogKey(String(input.value || '').trim());
+      const firstTheme = extractThemeTokens(String(input.value || ''))[0] || '';
+      const inputKey = normalizeCatalogKey(firstTheme);
       if (!inputKey) {
         select.value = '';
         return;
@@ -20015,7 +20199,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       (projects || []).forEach((project) => {
         const state = stateByProjectId.get(project.projectId);
         names.push(...(state?.themes || []));
-        names.push(...((state?.tasks || []).map((task) => String(task?.theme || '').trim())));
+        names.push(...((state?.tasks || []).flatMap((task) => extractThemeTokens(task?.theme || ''))));
       });
       names.push(...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim())));
       return uniqueThemeNames(names);
@@ -20060,7 +20244,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     function syncProjectThemeFilterAssist(state) {
       const themes = [
         ...(state?.themes || []),
-        ...((state?.tasks || []).map((task) => String(task?.theme || '').trim())),
+        ...((state?.tasks || []).flatMap((task) => extractThemeTokens(task?.theme || ''))),
         ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
       ];
       fillThemePicker('project-task-theme-known', 'project-task-theme-filter', themes, 'Thématiques projet + référentiel...');
@@ -20130,7 +20314,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     function syncGlobalThemeFilterAssist(tasks = []) {
       const themes = [
-        ...((tasks || []).map((task) => String(task?.theme || '').trim())),
+        ...((tasks || []).flatMap((task) => extractThemeTokens(task?.theme || ''))),
         ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
       ];
       fillProjectThemeSelect('global-task-theme-known', themes, 'Référentiel thématiques...');
@@ -20140,7 +20324,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (!state?.project) return;
       const themes = [
         ...(state.themes || []),
-        ...((state.tasks || []).map((task) => String(task?.theme || '').trim())),
+        ...((state.tasks || []).flatMap((task) => extractThemeTokens(task?.theme || ''))),
         ...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim()))
       ];
       fillThemePicker('project-doc-theme-known', 'project-doc-theme', themes, 'Thématiques projet + référentiel...');
@@ -20149,7 +20333,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     function refreshGlobalDocumentThemePicker(allDocs = [], states = []) {
       const themes = [
         ...((states || []).flatMap((state) => (state?.themes || []))),
-        ...((states || []).flatMap((state) => (state?.tasks || []).map((task) => String(task?.theme || '').trim()))),
+        ...((states || []).flatMap((state) => (state?.tasks || []).flatMap((task) => extractThemeTokens(task?.theme || '')))),
         ...((allDocs || []).map((doc) => String(doc?.theme || '').trim())),
         ...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim()))
       ];
@@ -20498,6 +20682,56 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       descEl.classList.toggle('hidden', !projectDescriptionExpanded);
       toggleBtn.classList.remove('hidden');
       toggleBtn.textContent = projectDescriptionExpanded ? 'Masquer la description' : 'Afficher la description';
+    }
+
+    function closeProjectReadModal() {
+      const modal = document.getElementById('modal-project-read');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    async function openProjectReadModal(projectId = currentProjectId) {
+      const targetProjectId = String(projectId || '').trim() || String(currentProjectId || '').trim();
+      if (!targetProjectId) return;
+      const state = await getProjectState(targetProjectId);
+      if (!state?.project) return;
+
+      const modal = document.getElementById('modal-project-read');
+      const titleEl = document.getElementById('project-read-title');
+      const metaEl = document.getElementById('project-read-meta');
+      const badgesEl = document.getElementById('project-read-badges');
+      const contentEl = document.getElementById('project-read-content');
+      if (!modal || !titleEl || !metaEl || !badgesEl || !contentEl) return;
+
+      const project = state.project;
+      const descriptionHtml = sanitizeRichTextHtmlPreserve(project.description || '');
+      const visibilityLabel = normalizeSharingMode(project.sharingMode, 'private') === 'shared' ? 'Collaboratif' : 'Prive';
+      const readAccessLabel = normalizeProjectReadAccess(project.readAccess, 'private') === 'public' ? 'Lecture publique' : 'Lecture privee';
+      const priority = normalizeProjectPriority(project.priority);
+      const status = String(project.status || 'en-cours');
+      const statusLabel = status === 'urgent'
+        ? 'Urgent'
+        : status === 'termine'
+          ? 'Termine'
+          : status === 'planifie'
+            ? 'Planifie'
+            : 'En cours';
+
+      titleEl.textContent = String(project.name || 'Projet');
+      metaEl.textContent = `${project.createdByName || project.createdBy || 'Auteur inconnu'} • ${new Date(Number(project.updatedAt || project.createdAt || Date.now())).toLocaleString('fr-FR')}`;
+      badgesEl.innerHTML = [
+        `<span class="workspace-chip ${normalizeSharingMode(project.sharingMode, 'private') === 'shared' ? 'workspace-chip-shared' : 'workspace-chip-private'}">${escapeHtml(visibilityLabel)}</span>`,
+        `<span class="workspace-chip ${getProjectPriorityChipClass(priority)}">${escapeHtml(getProjectPriorityLabel(priority))}</span>`,
+        `<span class="workspace-chip workspace-chip-status-active">${escapeHtml(statusLabel)}</span>`,
+        `<span class="workspace-chip workspace-chip-private">${escapeHtml(readAccessLabel)}</span>`
+      ].join('');
+      contentEl.innerHTML = descriptionHtml || '<p class="text-slate-500">Aucune description.</p>';
+
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      window.TaskMDAReadModalZoom?.applyZoomToContainer?.('#project-read-content');
+      window.TaskMDAReadModalZoom?.updateZoomIndicators?.();
     }
 
     function resetProjectInlineEditingState() {
@@ -22139,7 +22373,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             </div>
             <div>
               <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tache')}</h4>
-              <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
+              <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')}</p>
+              <div class="mt-1 flex flex-wrap items-center gap-1">${renderTaskThemeChipsHtml(task.theme)}</div>
               ${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId)) ? `<p class="mt-1">${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId))}</p>` : ''}
             </div>
             <p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>
@@ -22177,7 +22412,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
                       <td class="px-3 py-2">
                         <p class="font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
                         <div class="flex flex-wrap items-center gap-1 mt-1">${buildTaskRecurrenceBadgeHtml(task)}</div>
-                        <p class="text-xs text-slate-500">${escapeHtml(task.theme || 'General')}</p>
+                        <div class="mt-1 flex flex-wrap items-center gap-1">${renderTaskThemeChipsHtml(task.theme)}</div>
                         ${buildSubtaskProgressHtml(task, true)}
                       </td>
                       <td class="px-3 py-2 text-slate-600">${escapeHtml(task.sourceProjectName || 'Hors projet')}</td>
@@ -22211,7 +22446,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               </div>
               ${buildTaskRecurrenceBadgeHtml(task)}
               <h4 class="font-semibold text-slate-900 text-[1.04rem] leading-tight mb-1">${escapeHtml(task.title || 'Tache')}</h4>
-              <p class="text-xs text-slate-500 mb-2">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'General')}</p>
+              <p class="text-xs text-slate-500 mb-1">${escapeHtml(task.sourceProjectName || 'Hors projet')}</p>
+              <div class="mb-2 flex flex-wrap items-center gap-1">${renderTaskThemeChipsHtml(task.theme)}</div>
               ${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId)) ? `<p class="mb-2">${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId))}</p>` : ''}
               <p class="text-sm text-slate-700 global-kanban-desc mb-2">${escapeHtml(task.description || '')}</p>
               ${buildSubtaskProgressHtml(task, true)}
@@ -22557,7 +22793,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           </div>
           <div>
             <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tâche')}</h4>
-            <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'Général')}</p>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')}</p>
+            <div class="mt-1 flex flex-wrap items-center gap-1">${renderTaskThemeChipsHtml(task.theme)}</div>
             ${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId)) ? `<p class="mt-1">${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId))}</p>` : ''}
           </div>
           ${showGlobalTaskCardDescription ? `<p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>` : ''}
@@ -22631,7 +22868,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="text-sm font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
-                <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
+                <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')}</p>
+                <div class="mt-1 flex flex-wrap items-center gap-1">${renderTaskThemeChipsHtml(task.theme)}</div>
                 <p class="text-xs text-slate-500 mt-1">Archivee le ${task.archivedAt ? new Date(task.archivedAt).toLocaleString('fr-FR') : '-'}</p>
               </div>
               <div class="flex items-center gap-2 text-xs">
@@ -25232,6 +25470,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     let editingGlobalFeedPostId = null;
+    let globalFeedLinkedDocIdsDraft = new Set();
 
     function setGlobalFeedComposerCollapsed(collapsed, options = {}) {
       const panel = document.querySelector('.feed-composer-panel');
@@ -25286,8 +25525,54 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }
     }
 
+    function getGlobalFeedLinkedDocIdsDraft() {
+      return Array.from(globalFeedLinkedDocIdsDraft || [])
+        .map((id) => String(id || '').trim())
+        .filter(Boolean);
+    }
+
+    function refreshGlobalFeedAttachmentsBadge() {
+      const badge = document.getElementById('global-feed-attachments-badge');
+      if (!badge) return;
+      const count = getGlobalFeedLinkedDocIdsDraft().length;
+      if (count <= 0) {
+        badge.classList.add('hidden');
+        badge.innerHTML = '';
+        return;
+      }
+      const label = count > 1 ? `${count} documents joints` : '1 document joint';
+      badge.classList.remove('hidden');
+      badge.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">attach_file</span><span>${escapeHtml(label)}</span>`;
+    }
+
+    function setGlobalFeedLinkedDocIdsDraft(ids = []) {
+      globalFeedLinkedDocIdsDraft = new Set(
+        (Array.isArray(ids) ? ids : [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      );
+      refreshGlobalFeedAttachmentsBadge();
+      return getGlobalFeedLinkedDocIdsDraft();
+    }
+
+    function addGlobalFeedLinkedDocIdsDraft(ids = []) {
+      const next = new Set(getGlobalFeedLinkedDocIdsDraft());
+      (Array.isArray(ids) ? ids : []).forEach((id) => {
+        const normalized = String(id || '').trim();
+        if (normalized) next.add(normalized);
+      });
+      return setGlobalFeedLinkedDocIdsDraft(Array.from(next));
+    }
+
+    function resetGlobalFeedLinkedDocIdsDraft() {
+      globalFeedLinkedDocIdsDraft = new Set();
+      refreshGlobalFeedAttachmentsBadge();
+      return [];
+    }
+
     function cancelEditGlobalFeedPost() {
       editingGlobalFeedPostId = null;
+      resetGlobalFeedLinkedDocIdsDraft();
       document.getElementById('global-feed-composer-title').textContent = "Nouveau post d'information";
       document.getElementById('global-feed-post-btn-label').textContent = "Publier";
       document.getElementById('global-feed-post-btn-icon').textContent = "send";
@@ -25360,6 +25645,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           if (ref.type === 'calendar-info' && calendarSelect) calendarSelect.value = ref.id;
         });
       }
+      const linkedFromContent = extractLinkedGlobalDocIdsFromHtml(String(existing.content || ''));
+      const linkedStored = Array.isArray(existing.linkedDocIds) ? existing.linkedDocIds : [];
+      setGlobalFeedLinkedDocIdsDraft([...linkedStored, ...linkedFromContent]);
       updateGlobalFeedMentionCounter();
       document.querySelector('.feed-composer-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -26929,7 +27217,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       });
       if (!Array.isArray(docs) || docs.length === 0) return false;
 
-      const insertedBlocks = [];
+      const createdDocIds = [];
       for (const file of docs) {
         const row = {
           id: uuidv4(),
@@ -26946,26 +27234,38 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           createdAt: Date.now()
         };
         await putEncrypted('globalDocs', row, 'id');
-        insertedBlocks.push(buildInlineAttachedDocumentHtml(row));
+        createdDocIds.push(String(row.id || '').trim());
       }
 
       if (sourceInput) sourceInput.value = '';
-      const inserted = appendDigestBlocksToEditorById(
-        String(options?.editorId || ''),
-        String(options?.fallbackInputId || ''),
-        insertedBlocks
-      );
-      if (!inserted) return false;
-      if (String(options?.editorId || '') === 'global-feed-editor') {
+      const targetEditorId = String(options?.editorId || '').trim();
+      if (targetEditorId === 'global-feed-editor') {
+        addGlobalFeedLinkedDocIdsDraft(createdDocIds);
         await updateGlobalFeedMentionCounter();
+      } else {
+        const insertedBlocks = [];
+        for (const docId of createdDocIds) {
+          const row = await getDecrypted('globalDocs', docId, 'id');
+          if (!row) continue;
+          insertedBlocks.push(buildInlineAttachedDocumentHtml(row));
+        }
+        const inserted = appendDigestBlocksToEditorById(
+          targetEditorId,
+          String(options?.fallbackInputId || ''),
+          insertedBlocks
+        );
+        if (!inserted) return false;
       }
       await renderGlobalDocs();
       showToast(`${docs.length} document(s) intégré(s)`);
-      return true;
+      return {
+        inserted: true,
+        createdDocIds
+      };
     }
 
     async function importDocumentsIntoGlobalFeedEditor() {
-      await attachDocumentsToRichEditorFromInput('global-feed-attach-doc-files', {
+      return await attachDocumentsToRichEditorFromInput('global-feed-attach-doc-files', {
         editorId: 'global-feed-editor',
         fallbackInputId: 'global-feed-input',
         rubric: 'global-feed-attachment',
@@ -27121,6 +27421,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     window.deleteGlobalFeedPost = deleteGlobalFeedPost;
     window.openGlobalFeedPostReadModal = openGlobalFeedPostReadModal;
     window.openGlobalNoteReadModal = openGlobalNoteReadModal;
+    window.openProjectReadModal = openProjectReadModal;
+    window.closeProjectReadModal = closeProjectReadModal;
+    window.openGlobalHubAggregatedNoteRead = openGlobalHubAggregatedNoteRead;
     window.deleteGlobalNoteLinkedDocument = deleteGlobalNoteLinkedDocument;
     window.closeGlobalReadModal = closeGlobalReadModal;
     window.toggleGlobalFeedExportMenu = toggleGlobalFeedExportMenu;
@@ -29011,7 +29314,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2 mb-1">
                 <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
-                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${renderTaskThemeChipsHtml(task.theme)}
                 ${buildTaskHierarchyChipsHtml(task, currentProjectState)}
                 <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
                 ${buildTaskRecurrenceBadgeHtml(task)}
@@ -29044,7 +29347,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             <div>
               <div class="flex flex-wrap items-center gap-2 mb-1">
                 <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
-                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${renderTaskThemeChipsHtml(task.theme)}
                 ${buildTaskHierarchyChipsHtml(task, currentProjectState)}
                 ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
                 ${buildTaskRecurrenceBadgeHtml(task)}
@@ -29066,7 +29369,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           ${showProjectTaskCardDescription ? `<p class="task-card-description text-gray-600 text-sm mb-3">${escapeHtml(task.description || '')}</p>` : ''}
           ${buildTaskProgressBarHtml(task)}
           <div class="hidden text-xs text-slate-500 flex flex-wrap gap-2 mb-3">
-            ${task.theme ? `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Thématique: ${escapeHtml(task.theme)}</span>` : ''}
+            ${renderTaskThemeChipsHtml(task.theme, { withLabel: true })}
             ${getTaskGroupName(task, currentProjectState) ? `<span class="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Groupe: ${escapeHtml(getTaskGroupName(task, currentProjectState) || 'N/A')}</span>` : ''}
           </div>
           <div class="task-card-meta text-xs text-gray-500 flex flex-wrap items-center gap-3 mb-3">
@@ -29240,7 +29543,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               <p class="text-xs text-gray-500 mb-2">${escapeHtml(task.description || '')}</p>
               ${buildSubtaskProgressHtml(task, true)}
               <div class="mb-2 flex flex-wrap gap-1">
-                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${renderTaskThemeChipsHtml(task.theme)}
                 ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
               </div>
               <div class="text-xs text-gray-500 flex items-center justify-between">
@@ -33424,6 +33727,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           normalizeSearch,
           normalizeSharingMode,
           normalizeCatalogKey,
+          normalizeTaskThemeValue,
           syncThemePickerSelectionFromInput,
           toYmd,
           populateTaskDeadlineForm,
@@ -33613,6 +33917,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           state: {
             setSearchQuery: (value) => { globalNotesSearchQuery = String(value || ''); },
             setScopeFilter: (value) => { globalNotesScopeFilter = String(value || 'all'); },
+            setOriginFilter: (value) => { globalNotesOriginFilter = String(value || 'all'); },
             setSortMode: (value) => { globalNotesSortMode = String(value || 'recent'); },
             setTabMode: (value) => { globalNotesTabMode = String(value || 'all'); },
             setPage: (value) => { globalNotesPage = Math.max(1, Number(value) || 1); },
@@ -33781,7 +34086,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             getGlobalFeedFocusPostId: () => globalFeedFocusPostId,
             setGlobalFeedFocusPostId: (value) => {
               globalFeedFocusPostId = String(value || '').trim();
-            }
+            },
+            getGlobalFeedLinkedDocIdsDraft
           },
           actions: {
             renderGlobalFeed,
@@ -33818,6 +34124,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             getAllGlobalDocs: () => getAllDecrypted('globalDocs', 'id'),
             populateGlobalFeedComposerContext,
             extractLinkedGlobalDocIdsFromHtml,
+            stripInlineAttachedDocumentBlocksFromHtml,
+            addGlobalFeedLinkedDocIdsDraft,
+            resetGlobalFeedLinkedDocIdsDraft,
             encodeDocumentPreviewRef,
             getProjectState,
             showProjectDetail,
@@ -34346,6 +34655,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       });
     }
     document.getElementById('btn-edit-project')?.addEventListener('click', () => openEditProjectModal());
+    document.getElementById('btn-read-project')?.addEventListener('click', () => openProjectReadModal(currentProjectId));
+    document.getElementById('btn-close-project-read-modal')?.addEventListener('click', () => closeProjectReadModal());
     document.getElementById('btn-mark-project-done')?.addEventListener('click', () => markProjectDoneFromDashboard(currentProjectId));
     document.getElementById('btn-delete-project')?.addEventListener('click', () => deleteCurrentProject());
     document.getElementById('btn-projects-bulk-select-toggle')?.addEventListener('click', async () => {
@@ -35961,6 +36272,37 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     document.getElementById('btn-close-global-task-details')?.addEventListener('click', async () => {
       await closeGlobalTaskDetails();
     });
+    document.getElementById('task-title')?.addEventListener('contextmenu', (event) => {
+      const selectedText = getSelectedTextFromTaskTitleInput();
+      if (!selectedText) {
+        hideTaskTitleContextMenu();
+        return;
+      }
+      event.preventDefault();
+      const menu = ensureTaskTitleContextMenu();
+      menu.setAttribute('data-selected-text', selectedText);
+      menu.classList.remove('hidden');
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+      const desiredLeft = Number(event.clientX || 0) + 8;
+      const desiredTop = Number(event.clientY || 0) + 8;
+      const menuRect = menu.getBoundingClientRect();
+      const left = Math.max(8, Math.min(desiredLeft, Math.max(8, viewportWidth - menuRect.width - 8)));
+      const top = Math.max(8, Math.min(desiredTop, Math.max(8, viewportHeight - menuRect.height - 8)));
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    });
+    document.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target && target.closest('#task-title-context-menu')) return;
+      hideTaskTitleContextMenu();
+    });
+    document.addEventListener('scroll', hideTaskTitleContextMenu, true);
+    document.addEventListener('keydown', (event) => {
+      if (String(event.key || '').toLowerCase() === 'escape') {
+        hideTaskTitleContextMenu();
+      }
+    });
     document.getElementById('btn-close-task-convert-modal')?.addEventListener('click', () => {
       closeTaskConvertModal();
     });
@@ -36119,6 +36461,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         await closeDocumentPreview();
         closeDocumentBindingModal();
         closeDocumentEditorModal();
+        closeProjectReadModal();
         closeProjectNoteEditor();
         closeTaskConvertModal();
         closeGlobalConversationDeleteModal();
@@ -36187,6 +36530,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     });
     registerSafeBackdropClose('modal-global-read', () => {
       closeGlobalReadModal();
+    });
+    registerSafeBackdropClose('modal-project-read', () => {
+      closeProjectReadModal();
     });
     registerSafeBackdropClose('modal-app-help', () => {
       document.getElementById('modal-app-help')?.classList.add('hidden');
@@ -36440,6 +36786,84 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
+    let taskTitleContextMenuEl = null;
+
+    function hideTaskTitleContextMenu() {
+      if (!taskTitleContextMenuEl) return;
+      taskTitleContextMenuEl.classList.add('hidden');
+      taskTitleContextMenuEl.removeAttribute('data-selected-text');
+    }
+
+    function getSelectedTextFromTaskTitleInput() {
+      const input = document.getElementById('task-title');
+      if (!(input instanceof HTMLInputElement)) return '';
+      const start = Number.isFinite(input.selectionStart) ? Number(input.selectionStart) : 0;
+      const end = Number.isFinite(input.selectionEnd) ? Number(input.selectionEnd) : 0;
+      if (end <= start) return '';
+      return String(input.value || '').slice(start, end).trim();
+    }
+
+    function appendTextToTaskDescriptionEditor(textValue) {
+      const text = String(textValue || '').trim();
+      if (!text) return false;
+      const quill = projectDescriptionQuillEditors.get('task-description-editor');
+      if (quill) {
+        const currentPlain = String(quill.getText() || '').trim();
+        const insertAt = Math.max(0, quill.getLength() - 1);
+        const prefix = currentPlain ? '\n' : '';
+        quill.insertText(insertAt, `${prefix}${text}`, 'user');
+        quill.setSelection(insertAt + prefix.length + text.length, 0, 'user');
+        return true;
+      }
+      const editor = document.getElementById('task-description-editor');
+      if (editor) {
+        const existing = String(editor.textContent || '').trim();
+        const separator = existing ? '\n' : '';
+        editor.textContent = `${existing}${separator}${text}`;
+        return true;
+      }
+      const fallback = document.getElementById('task-description');
+      if (fallback instanceof HTMLTextAreaElement) {
+        const existing = String(fallback.value || '').trim();
+        const separator = existing ? '\n' : '';
+        fallback.value = `${existing}${separator}${text}`;
+        return true;
+      }
+      return false;
+    }
+
+    function ensureTaskTitleContextMenu() {
+      if (taskTitleContextMenuEl) return taskTitleContextMenuEl;
+      const menu = document.createElement('div');
+      menu.id = 'task-title-context-menu';
+      menu.className = 'task-title-context-menu hidden';
+      menu.innerHTML = `
+        <button type="button" data-task-title-action="copy-clipboard">Copier le texte</button>
+        <button type="button" data-task-title-action="copy-description">Copier dans la description</button>
+      `;
+      document.body.appendChild(menu);
+      menu.addEventListener('click', async (event) => {
+        const btn = event.target instanceof Element ? event.target.closest('button[data-task-title-action]') : null;
+        if (!(btn instanceof HTMLButtonElement)) return;
+        const action = String(btn.getAttribute('data-task-title-action') || '').trim();
+        const selectedText = String(menu.getAttribute('data-selected-text') || '').trim();
+        if (!selectedText) {
+          hideTaskTitleContextMenu();
+          return;
+        }
+        if (action === 'copy-clipboard') {
+          const ok = await copyTextToClipboard(selectedText);
+          showToast(ok ? 'Texte copié dans le presse-papiers' : 'Copie impossible');
+        } else if (action === 'copy-description') {
+          const inserted = appendTextToTaskDescriptionEditor(selectedText);
+          showToast(inserted ? 'Texte ajouté à la description' : 'Description indisponible');
+        }
+        hideTaskTitleContextMenu();
+      });
+      taskTitleContextMenuEl = menu;
+      return menu;
+    }
+
     function openMessageImagePreview(src, altText = '') {
       const modal = document.getElementById('modal-message-image-preview');
       const image = document.getElementById('message-image-preview-img');
@@ -36681,8 +37105,12 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     // Démarrer l'application
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', startApp);
+      document.addEventListener('DOMContentLoaded', () => {
+        initEditorCodeTheme();
+        startApp();
+      });
     } else {
+      initEditorCodeTheme();
       startApp();
     }
 
@@ -36829,14 +37257,3 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         });
       });
     }
-
-
-
-
-
-
-
-
-
-
-

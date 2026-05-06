@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Module de gestion du zoom de texte dans les modales de lecture
  * ================================================================
  *
@@ -51,6 +51,7 @@
 
       // Sélecteurs des conteneurs de contenu dans chaque modale
       contentSelectors: [
+        '#project-read-content',       // Fiche projet (lecture)
         '#project-note-read-content',  // Notes de projet
         '#global-read-content',        // Notes globales / fil d'info
         '#doc-preview-content'         // Prévisualisation de documents
