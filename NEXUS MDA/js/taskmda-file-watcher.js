@@ -8,12 +8,12 @@
 (function(window) {
   'use strict';
 
-  // Configuration par d�faut
+  // Configuration par defaut
   const DEFAULT_POLL_INTERVAL = 60000; // 1 minute
   const MIN_POLL_INTERVAL = 30000; // 30 secondes minimum
   const MAX_POLL_INTERVAL = 3600000; // 1 heure maximum
 
-  // Patterns de fichiers support�s par cat�gorie
+  // Patterns de fichiers supportes par categorie
   const FILE_PATTERNS = {
     excel: ['*.xlsx', '*.xls', '*.xlsm', '*.xlsb'],
     word: ['*.docx', '*.doc', '*.docm'],
@@ -24,7 +24,7 @@
     all: ['*.*']
   };
 
-  // �tat global
+  // etat global
   let pollTimers = new Map(); // watcherId -> intervalId
   let isPollingActive = false;
 
@@ -51,7 +51,7 @@
   }
 
   /**
-   * V�rifie si un nom de fichier correspond aux patterns
+   * Verifie si un nom de fichier correspond aux patterns
    */
   function matchesPatterns(fileName, patterns) {
     if (!patterns || patterns.length === 0) return true;
@@ -62,15 +62,15 @@
   }
 
   /**
-   * Calcule un hash simple bas� sur lastModified + size
-   * (suffisant pour d�tecter les modifications)
+   * Calcule un hash simple base sur lastModified + size
+   * (suffisant pour detecter les modifications)
    */
   function computeFileHash(lastModified, size) {
     return `${lastModified}-${size}`;
   }
 
   /**
-   * R�cup�re tous les fichiers d'un dossier (r�cursif optionnel)
+   * Recupere tous les fichiers d'un dossier (recursif optionnel)
    */
   async function scanDirectory(dirHandle, recursive = false, basePath = '') {
     const files = [];
@@ -123,7 +123,7 @@
     const index = store.index('watcherId');
     const snapshots = await index.getAll(watcherId);
 
-    // Convertir en Map pour acc�s rapide
+    // Convertir en Map pour acces rapide
     const snapshotMap = new Map();
     snapshots.forEach(snap => {
       snapshotMap.set(snap.filePath, snap);
@@ -133,7 +133,7 @@
   }
 
   /**
-   * Met � jour ou cr�e un snapshot
+   * Met a jour ou cree un snapshot
    */
   async function updateSnapshot(watcherId, fileData) {
     const db = await getDatabase();
@@ -154,7 +154,7 @@
   }
 
   /**
-   * Marque les snapshots comme supprim�s
+   * Marque les snapshots comme supprimes
    */
   async function markSnapshotsAsDeleted(watcherId, pathsToDelete) {
     if (pathsToDelete.length === 0) return;
@@ -177,18 +177,18 @@
   }
 
   // ============================================================================
-  // D�TECTION DES CHANGEMENTS
+  // DETECTION DES CHANGEMENTS
   // ============================================================================
 
   /**
-   * Compare les fichiers actuels avec les snapshots et d�tecte les changements
+   * Compare les fichiers actuels avec les snapshots et detecte les changements
    */
   async function detectChanges(watcherId, currentFiles, snapshots) {
     const events = [];
     const now = Date.now();
     const currentPaths = new Set();
 
-    // V�rifier les fichiers actuels (nouveaux ou modifi�s)
+    // Verifier les fichiers actuels (nouveaux ou modifies)
     for (const fileData of currentFiles) {
       currentPaths.add(fileData.path);
       const snapshot = snapshots.get(fileData.path);
@@ -208,7 +208,7 @@
           newModified: fileData.lastModified
         });
       } else if (snapshot.hash !== currentHash) {
-        // Fichier modifi�
+        // Fichier modifie
         events.push({
           id: uuidv4(),
           watcherId,
@@ -225,7 +225,7 @@
       }
     }
 
-    // V�rifier les fichiers supprim�s
+    // Verifier les fichiers supprimes
     for (const [path, snapshot] of snapshots.entries()) {
       if (snapshot.status === 'active' && !currentPaths.has(path)) {
         events.push({
@@ -246,7 +246,7 @@
   }
 
   /**
-   * Enregistre les �v�nements d�tect�s
+   * Enregistre les evenements detectes
    */
   async function saveEvents(events) {
     if (events.length === 0) return;
@@ -267,23 +267,23 @@
   // ============================================================================
 
   /**
-   * Cr�e une notification pour un �v�nement de fichier
+   * Cree une notification pour un evenement de fichier
    * Injecte dans le panneau Notifications (cloche) via le bridge CustomEvent
    */
   function createNotificationForEvent(watcher, event) {
     const labels = {
-      created: 'Nouveau fichier d�tect�',
-      modified: 'Fichier modifi�',
-      deleted: 'Fichier supprim�'
+      created: 'Nouveau fichier detecte',
+      modified: 'Fichier modifie',
+      deleted: 'Fichier supprime'
     };
     const icons = {
-      created: '??',
-      modified: '??',
-      deleted: '???'
+      created: '[Alerte]',
+      modified: '[Alerte]',
+      deleted: '[Alerte]?'
     };
 
-    const title = `${icons[event.eventType] || '??'} ${labels[event.eventType] || 'Changement fichier'}`;
-    const body = `${event.fileName} � Observateur : ${watcher.name}`;
+    const title = `${icons[event.eventType] || '[Alerte]'} ${labels[event.eventType] || 'Changement fichier'}`;
+    const body = `${event.fileName} - Observateur : ${watcher.name}`;
 
     // Injection dans le panneau Notifications (cloche) via le bridge
     window.dispatchEvent(new CustomEvent('taskmda:inject-notification', {
@@ -304,7 +304,7 @@
       }
     }));
 
-    // Marquer l'�v�nement comme notifi� en DB
+    // Marquer l'evenement comme notifie en DB
     (async () => {
       try {
         const db = await getDatabase();
@@ -320,13 +320,13 @@
   }
 
   /**
-   * Affiche un toast visuel temps r�el pour un �v�nement fichier
+   * Affiche un toast visuel temps reel pour un evenement fichier
    */
   function showRealtimeToastForEvent(watcher, event) {
     const labels = {
-      created: '?? Nouveau fichier',
-      modified: '?? Fichier modifi�',
-      deleted: '??? Fichier supprim�'
+      created: '[Nouveau fichier]',
+      modified: '[Alerte] Fichier modifie',
+      deleted: '[Alerte]? Fichier supprime'
     };
     const msg = `${labels[event.eventType] || 'Changement'} : ${event.fileName}`;
     if (typeof showToast === 'function') {
@@ -335,11 +335,11 @@
   }
 
   // ============================================================================
-  // CYCLE DE V�RIFICATION (POLLING)
+  // CYCLE DE VERIFICATION (POLLING)
   // ============================================================================
 
   /**
-   * Effectue une v�rification compl�te d'un observateur
+   * Effectue une verification complete d'un observateur
    */
   async function checkWatcher(watcherId) {
     try {
@@ -351,13 +351,13 @@
         return;
       }
 
-      // V�rifier les permissions du dossier
+      // Verifier les permissions du dossier
       if (!watcher.folderHandle) {
         console.warn(`Watcher ${watcherId}: no folder handle`);
         return;
       }
 
-      // Demander la permission si n�cessaire
+      // Demander la permission si necessaire
       try {
         const permission = await watcher.folderHandle.queryPermission({ mode: 'read' });
         if (permission !== 'granted') {
@@ -389,16 +389,16 @@
       // Charger les snapshots
       const snapshots = await loadSnapshots(watcherId);
 
-      // D�tecter les changements
+      // Detecter les changements
       const events = await detectChanges(watcherId, filteredFiles, snapshots);
 
       debugLog(`Detected ${events.length} changes`);
 
-      // Sauvegarder les �v�nements
+      // Sauvegarder les evenements
       if (events.length > 0) {
         await saveEvents(events);
 
-        // Cr�er les notifications
+        // Creer les notifications
         const shouldNotify = {
           created: watcher.notifyOnCreate !== false,
           modified: watcher.notifyOnModify !== false,
@@ -409,7 +409,7 @@
           if (shouldNotify[event.eventType]) {
             await createNotificationForEvent(watcher, event);
 
-            // Notification navigateur temps r�el
+            // Notification navigateur temps reel
             if (watcher.realtimeNotify) {
               showRealtimeToastForEvent(watcher, event);
             }
@@ -417,18 +417,18 @@
         }
       }
 
-      // Mettre � jour les snapshots
+      // Mettre a jour les snapshots
       for (const fileData of filteredFiles) {
         await updateSnapshot(watcherId, fileData);
       }
 
-      // Marquer les fichiers supprim�s
+      // Marquer les fichiers supprimes
       const deletedPaths = events
         .filter(e => e.eventType === 'deleted')
         .map(e => e.filePath);
       await markSnapshotsAsDeleted(watcherId, deletedPaths);
 
-      // Mettre � jour la date de derni�re v�rification et l'historique
+      // Mettre a jour la date de derniere verification et l'historique
       watcher.lastCheckAt = Date.now();
       watcher.checkHistory = watcher.checkHistory || [];
       watcher.checkHistory.unshift(watcher.lastCheckAt);
@@ -447,12 +447,12 @@
   }
 
   /**
-   * D�marre le polling pour un observateur
+   * Demarre le polling pour un observateur
    */
   function startPolling(watcher) {
     if (!watcher.enabled) return;
 
-    // Arr�ter le polling existant si pr�sent
+    // Arreter le polling existant si present
     stopPolling(watcher.id);
 
     const interval = Math.max(
@@ -462,10 +462,10 @@
 
     debugLog(`Starting polling for watcher ${watcher.id} (interval: ${interval}ms)`);
 
-    // Premi�re v�rification imm�diate
+    // Premiere verification immediate
     checkWatcher(watcher.id);
 
-    // Puis polling r�gulier
+    // Puis polling regulier
     const timerId = setInterval(() => {
       checkWatcher(watcher.id);
     }, interval);
@@ -474,7 +474,7 @@
   }
 
   /**
-   * Arr�te le polling pour un observateur
+   * Arrete le polling pour un observateur
    */
   function stopPolling(watcherId) {
     if (pollTimers.has(watcherId)) {
@@ -485,12 +485,12 @@
   }
 
   /**
-   * D�marre tous les observateurs actifs
+   * Demarre tous les observateurs actifs
    */
   async function startAllWatchers() {
     if (isPollingActive) return;
 
-    // V�rifier que la DB est disponible
+    // Verifier que la DB est disponible
     if (typeof getDatabase !== 'function') {
       debugLog('Database function not yet available, retrying in 2s...');
       setTimeout(() => startAllWatchers(), 2000);
@@ -500,7 +500,7 @@
     try {
       const db = await getDatabase();
 
-      // V�rifier que le store existe
+      // Verifier que le store existe
       if (!db.objectStoreNames.contains('fileWatchers')) {
         debugLog('fileWatchers store not yet available, retrying in 2s...');
         setTimeout(() => startAllWatchers(), 2000);
@@ -519,13 +519,13 @@
       isPollingActive = true;
       debugLog(`Started ${pollTimers.size} file watchers`);
     } catch (error) {
-      // Si la DB n'est pas encore initialis�e, r�essayer
+      // Si la DB n'est pas encore initialisee, reessayer
       if (error.message && error.message.includes('not initialized')) {
         debugLog('Database not yet initialized, retrying in 2s...');
         setTimeout(() => startAllWatchers(), 2000);
       } else {
         console.error('Error starting file watchers:', error);
-        // R�essayer apr�s 2s pour les autres erreurs aussi
+        // Reessayer apres 2s pour les autres erreurs aussi
         if (!isPollingActive) {
           setTimeout(() => startAllWatchers(), 2000);
         }
@@ -534,7 +534,7 @@
   }
 
   /**
-   * Arr�te tous les observateurs
+   * Arrete tous les observateurs
    */
   function stopAllWatchers() {
     for (const watcherId of pollTimers.keys()) {
@@ -565,16 +565,16 @@
     loadSnapshots,
     updateSnapshot,
 
-    // �v�nements
+    // evenements
     detectChanges,
     saveEvents,
 
-    // �tat
+    // etat
     isActive: () => isPollingActive,
     getActiveWatchers: () => Array.from(pollTimers.keys())
   };
 
-  // D�marrer automatiquement au chargement (avec d�lai pour attendre l'init de la DB)
+  // Demarrer automatiquement au chargement (avec delai pour attendre l'init de la DB)
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => startAllWatchers(), 5000);
@@ -583,7 +583,7 @@
     setTimeout(() => startAllWatchers(), 5000);
   }
 
-  // Arr�ter proprement avant d�chargement de la page
+  // Arreter proprement avant dechargement de la page
   window.addEventListener('beforeunload', () => {
     stopAllWatchers();
   });
@@ -1405,3 +1405,4 @@
   }
 
 })(window);
+

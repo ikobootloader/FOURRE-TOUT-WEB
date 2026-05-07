@@ -1,5 +1,44 @@
 # Changelog - TaskMDA Team
 
+## Mise a jour incrementale - Mai 2026 (Dependances frontend localisees)
+
+- Conformite mode local:
+  - remplacement des references CDN runtime dans `taskmda-team.html` par des references locales `vendor/*`.
+  - ajout des bibliotheques frontend en local dans `vendor/` (idb, marked, tabulator, xlsx, pdfjs, mammoth, quill, html2canvas, html2pdf, tailwind runtime).
+  - `pdf.worker.min.js` pointe maintenant vers `vendor/pdf.worker.min.js`.
+
+## Socle runtime courant (modules charges)
+
+- `js/taskmda-crypto.js`
+- `js/taskmda-ui.js`
+- `js/taskmda-theme.js`
+- `js/taskmda-notifications.js`
+- `js/taskmda-recurrence.js`
+- `js/taskmda-tasks.js`
+- `js/taskmda-social.js`
+- `js/taskmda-editor.js`
+- `js/taskmda-workflow.js`
+- `js/taskmda-shell.js`
+- `js/taskmda-project.js`
+- `js/taskmda-project-members-domain.js`
+- `js/taskmda-task-lifecycle-domain.js`
+- `js/taskmda-doc.js`
+- `js/taskmda-app-init.js`
+- `js/taskmda-comms-ui.js`
+- `js/taskmda-admin-ui.js`
+- `js/taskmda-hierarchy.js`
+- `js/taskmda-notes-shared.js`
+- `js/taskmda-document-storage.js`
+- `js/taskmda-calendar.js`
+- `js/taskmda-global.js`
+- `js/taskmda-email-generator.js`
+- `js/taskmda-file-watcher.js`
+- `js/taskmda-core-utils.js`
+- `js/taskmda-runtime-contract.js`
+- `js/taskmda-via-annuaire.js`
+- `js/taskmda-read-modal-zoom.js`
+- `js/taskmda-team.js`
+
 ## Mise a jour incrementale - Mai 2026 (Correctif critique: stack overflow edition document)
 
 - Correctif bloquant:
@@ -26,7 +65,7 @@
 ## Mise a jour incrementale - Mai 2026 (Recurrence UI + echeance taches recurrentes)
 
 - Correctif encodage:
-  - `js/taskmda-recurrence.js` : libellés et commentaires UTF-8 (remplacement des sequences type `premiÃ¨re`, `âœ"` / `âš ` par texte francais correct et sequences Unicode `\u2713` / `\u26A0`).
+  - `js/taskmda-recurrence.js` : libellés et commentaires UTF-8 (remplacement des séquences corrompues par du texte français correct et des séquences Unicode `\u2713` / `\u26A0`).
   - correctifs ponctuels de mojibake dans `js/taskmda-global.js` et `js/taskmda-doc.js` (messages « piece jointe de tache »).
 - Correctif echeance affichee (complement):
   - `taskDueDateKey` : pour une tache avec `recurring.enabled`, la date canonique de la prochaine occurrence est desormais `dueDate` (YMD) si presente, avant le calcul flexible `deadlineDate` / `deadlineMode` qui pouvait rester sur l ancienne occurrence.
@@ -679,5 +718,3 @@
 - Rotation des clés
 - Révocation de membres
 - Notifications en temps réel
-
-

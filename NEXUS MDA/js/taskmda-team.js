@@ -12,12 +12,13 @@
           marked: !!window.marked,
           TaskMDACoreUtils: !!window.TaskMDACoreUtils
         });
-        alert('❌ Erreur: Dépendances CDN non chargées.\n\nVérifiez votre connexion internet.');
+        alert('❌ Erreur: dépendances applicatives non chargées.\n\nVérifiez le dossier local `vendor/` et les scripts `js/`.');
         return false;
       }
-      debugLog('Dependances CDN chargees');
       return true;
     }
+
+    checkDependencies();
 
     // Charger les dépendances
     const uuidv4 = window.uuidv4;
@@ -27063,7 +27064,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const lib = globalThis.pdfjsLib;
       if (!lib || typeof lib.getDocument !== 'function') return false;
       if (lib.GlobalWorkerOptions && !lib.GlobalWorkerOptions.workerSrc) {
-        lib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
+        lib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
       }
       return true;
     }

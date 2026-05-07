@@ -531,13 +531,13 @@
           el.textContent = display;
           decorateEditableElement(el, 'name');
         }
-        if (title) title.textContent = `AperÃ§u: ${display}`;
+        if (title) title.textContent = `Aperçu: ${display}`;
         return;
       }
       if (field === 'theme') {
         const el = document.getElementById('doc-preview-meta-theme');
         if (el) {
-          el.textContent = normalized || 'GÃ©nÃ©ral';
+          el.textContent = normalized || 'Général';
           decorateEditableElement(el, 'theme');
         }
         return;
@@ -576,7 +576,7 @@
         const select = document.createElement('select');
         select.className = 'task-detail-inline-input task-detail-inline-select';
         [
-          ['private', 'PrivÃ©e'],
+          ['private', 'Privée'],
           ['shared', 'Collaborative']
         ].forEach(([v, l]) => {
           const opt = document.createElement('option');
@@ -751,7 +751,7 @@
       const metaSharing = document.getElementById('doc-preview-meta-sharing');
       const metaSource = document.getElementById('doc-preview-meta-source');
       if (metaName) metaName.textContent = safeName;
-      if (metaTheme) metaTheme.textContent = String(doc.theme || 'GÃ©nÃ©ral');
+      if (metaTheme) metaTheme.textContent = String(doc.theme || 'Général');
       if (metaNotes) metaNotes.textContent = String(doc.notes || 'Aucune note.');
       if (metaSharing) {
         const mode = opts.normalizeSharingMode?.(doc.sharingMode, 'private') || 'private';

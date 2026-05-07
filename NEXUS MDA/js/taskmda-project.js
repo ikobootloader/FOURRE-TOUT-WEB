@@ -2042,6 +2042,33 @@
     // The module is stateless and relies on injected helpers.
     const opts = options || {};
 
+    function getSharedFolderHandle() {
+      return typeof opts.getSharedFolderHandle === 'function' ? opts.getSharedFolderHandle() : null;
+    }
+
+    function canUseSharedFilesystemStorage() {
+      return Boolean(getSharedFolderHandle() && global.TaskMDADocumentStorage?.isAvailable?.());
+    }
+
+    async function storeAttachmentFile(file, context = {}) {
+      const theme = String(context.theme || 'General').trim() || 'General';
+      const scope = String(context.scope || 'project').trim() || 'project';
+      const rubric = String(context.rubric || 'attachment').trim() || 'attachment';
+      const projectId = String(context.projectId || 'global').trim() || 'global';
+      const fsMeta = await global.TaskMDADocumentStorage.writeFile(getSharedFolderHandle(), file, {
+        rubric,
+        scope,
+        projectId,
+        theme
+      });
+      return {
+        storageMode: fsMeta.storageMode || 'fs',
+        storageProvider: fsMeta.storageProvider || 'shared-folder',
+        storagePath: fsMeta.storagePath || '',
+        storedAt: Number(fsMeta.storedAt || Date.now()) || Date.now()
+      };
+    }
+
     function renameFileExtension(name, extensionWithDot) {
       const safeName = String(name || 'image').trim();
       const ext = String(extensionWithDot || '.jpg').trim() || '.jpg';

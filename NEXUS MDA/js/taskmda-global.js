@@ -77,46 +77,6 @@
       badge.title = activeCount > 1 ? `${activeCount} thématiques actives` : `${activeCount} thématique active`;
     }
 
-    async function resolveDocumentForBinding(docId) {
-      const id = String(docId || '').trim();
-      if (!id) return null;
-      const all = await actions.getGlobalDocumentsList?.();
-      const fromGlobal = (all || []).find((item) => String(item.id || '') === id);
-      if (fromGlobal) return fromGlobal;
-
-      const marker = ':project-doc:';
-      const markerIndex = id.indexOf(marker);
-      if (markerIndex <= 0) return null;
-      const sourceProjectId = id.slice(0, markerIndex);
-      const sourceDocId = id.slice(markerIndex + marker.length);
-      if (!sourceProjectId || !sourceDocId) return null;
-
-      const sourceState = await actions.getProjectState?.(sourceProjectId);
-      if (!sourceState?.project) return null;
-      const sourceDoc = (sourceState.documents || []).find((item) => String(item.docId || '') === sourceDocId);
-      if (!sourceDoc) return null;
-
-      return {
-        id,
-        name: sourceDoc.name,
-        type: sourceDoc.type,
-        size: sourceDoc.size,
-        data: sourceDoc.data,
-        theme: sourceDoc.theme || sourceState.project.name || 'Projet',
-        sourceProjectName: sourceState.project.name,
-        sourceProjectId,
-        docId: sourceDoc.docId,
-        linkedTaskIds: Array.isArray(sourceDoc.linkedTaskIds) ? [...sourceDoc.linkedTaskIds] : [],
-        sourceType: 'project-doc',
-        sharingMode: helpers.normalizeSharingMode?.(
-          sourceDoc.sharingMode,
-          helpers.normalizeSharingMode?.(sourceState.project.sharingMode, 'shared') || 'shared'
-        ) || 'shared',
-        notes: sourceDoc.notes || '',
-        createdAt: sourceDoc.uploadedAt || sourceDoc.createdAt || sourceState.project.createdAt || 0
-      };
-    }
-
     function bindDom() {
       // DOM bindings are attached once; module remains idempotent across repeated init calls.
       if (bound) return;
@@ -324,7 +284,7 @@
       const selectedCount = Number(state.getSelectedCount?.() || 0);
       const bulkEnabled = !!state.getBulkSelectionMode?.();
       if (!bulkEnabled || selectedCount <= 0) {
-        helpers.showToast?.('Aucune note sÃ©lectionnÃ©e');
+        helpers.showToast?.('Aucune note sélectionnée');
         return;
       }
       const modal = document.getElementById('modal-global-notes-export');
@@ -736,7 +696,7 @@
         ].join('');
         modeSelect.value = normalizeSharingMode(doc.sharingMode, 'private');
         themeInput.value = String(doc.theme || '').trim();
-        helpers.fillThemePicker?.('doc-binding-theme-known', 'doc-binding-theme', themeCatalog, 'ThÃ©matiques existantes...');
+        helpers.fillThemePicker?.('doc-binding-theme-known', 'doc-binding-theme', themeCatalog, 'Thématiques existantes...');
         nameInput.value = String(doc.name || 'Document').trim();
         sourceEl.textContent = `Source: ${doc.sourceProjectName || 'Hors projet'}`;
         storagePathInput.value = helpers.formatDocumentStoragePathForDisplay?.(doc) || '-';
@@ -818,7 +778,7 @@
               theme: nextTheme,
               updatedAt: Date.now()
             }, 'id');
-            if (!silent) helpers.showToast?.('Document mis Ã  jour');
+            if (!silent) helpers.showToast?.('Document mis à jour');
             changed = true;
             nextBindingId = String(doc.id || '');
             return;
@@ -826,7 +786,7 @@
 
           const targetState = await actions.getProjectState?.(targetProjectId);
           if (!targetState?.project || !actions.canEditProjectMeta?.(targetState)) {
-            if (!silent) helpers.showToast?.('Action non autorisÃ©e sur le projet cible');
+            if (!silent) helpers.showToast?.('Action non autorisée sur le projet cible');
             return;
           }
           const relocationForTarget = await actions.maybeRelocateStoredDocumentByTheme?.({
@@ -865,7 +825,7 @@
             void actions.syncProjectEventsToSharedSpace?.(targetProjectId, [createEventDoc]);
           }
           await actions.deleteFromStore?.('globalDocs', doc.id);
-          if (!silent) helpers.showToast?.('Document rattachÃ© au projet');
+          if (!silent) helpers.showToast?.('Document rattaché au projet');
           changed = true;
           nextBindingId = `${targetProjectId}:project-doc:${newDocId}`;
           return;
@@ -874,7 +834,7 @@
         if (doc.sourceType === 'project-doc') {
           const sourceState = await actions.getProjectState?.(doc.sourceProjectId);
           if (!sourceState?.project || !actions.canEditProjectMeta?.(sourceState)) {
-            if (!silent) helpers.showToast?.('Action non autorisÃ©e');
+            if (!silent) helpers.showToast?.('Action non autorisée');
             return;
           }
           const relocationForTarget = await actions.maybeRelocateStoredDocumentByTheme?.({
@@ -910,7 +870,7 @@
           } else {
             const targetState = await actions.getProjectState?.(targetProjectId);
             if (!targetState?.project || !actions.canEditProjectMeta?.(targetState)) {
-              if (!silent) helpers.showToast?.('Action non autorisÃ©e sur le projet cible');
+              if (!silent) helpers.showToast?.('Action non autorisée sur le projet cible');
               return;
             }
             const newDocId = helpers.uuidv4?.() || String(Date.now());
@@ -952,7 +912,7 @@
           if (helpers.getSharedFolderHandle?.()) {
             void actions.syncProjectEventsToSharedSpace?.(doc.sourceProjectId, [deleteEventDoc]);
           }
-          if (!silent) helpers.showToast?.(targetProjectId ? 'Document dÃ©placÃ© / mis Ã  jour' : 'Document dÃ©tachÃ© hors projet');
+          if (!silent) helpers.showToast?.(targetProjectId ? 'Document déplacé / mis à jour' : 'Document détaché hors projet');
           changed = true;
         }
       };
