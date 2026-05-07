@@ -507,6 +507,8 @@
       <button class="theme-toggle" onclick="toggleTheme()"><span class="theme-icon-sun">☀</span><span class="theme-icon-moon">☾</span></button>
       <button class="btn btn-ghost btn-sm" onclick="exportFile()">⬇ Export audit (.xlsx)</button>
       <button class="btn btn-primary btn-sm" onclick="saveFile()" id="saveBtn">💾 Sauvegarder</button>
+      <div style="width:1px;height:24px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>
+      <button class="btn btn-ghost btn-sm" onclick="confirmDisconnect()" title="Fermer le registre et revenir à l'écran d'accueil" style="color:var(--text2);">⏏ Fermer</button>
     </div>
   </header>
 
@@ -1084,50 +1086,57 @@ function parseWorkbook(wb) {
   if (wb.SheetNames.includes('Parametres')) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets['Parametres'], { header:1, defval:'' });
     const cell = (r, v) => (r && r[v] != null) ? r[v].toString().trim() : '';
-    const s=[],po=[],ro=[],pe=[];
 
-    // Détection automatique du format de la feuille Parametres :
-    //   v2 (actuelle) : row[0] = ['SERVICES','','POSTES','','ROLES','','PERMISSIONS']
-    //   v1 (ancienne) : row[2] = ['SERVICES / DEPARTEMENTS','','ROLES DISPONIBLES','','NIVEAUX DE PERMISSIONS',...]
-    // On cherche la ligne d'en-têtes (mot-clé SERVICE en col0) parmi les 5 premières lignes.
+    // Détecter la ligne d'en-têtes et le mapping de colonnes
+    // Format v2 : ['SERVICES','','POSTES','','ROLES','','PERMISSIONS']
+    // Format v1 : ['SERVICES / DEPARTEMENTS','','ROLES DISPONIBLES','','NIVEAUX DE PERMISSIONS',...]
     let dataStart = 1;
-    let colServices=0, colPostes=2, colRoles=4, colPermissions=6; // défauts v2
+    let colS=0, colPo=2, colRo=4, colPe=6;  // défauts v2
 
     for (let i=0; i<Math.min(rows.length, 5); i++) {
       const h0 = cell(rows[i], 0).toUpperCase();
       const h2 = cell(rows[i], 2).toUpperCase();
-      const h4 = cell(rows[i], 4).toUpperCase();
       if (!h0.includes('SERVICE')) continue;
       if (h2.includes('ROLE') || h2.includes('RÔLE')) {
-        // Format v1 : col0=Services, col2=Rôles, col4=Permissions, pas de Postes
-        colPostes = -1; colRoles = 2; colPermissions = 4;
+        // Format v1 : pas de colonne Postes
+        colPo = -1; colRo = 2; colPe = 4;
       }
-      // Format v2 : col0=Services, col2=Postes, col4=Rôles, col6=Permissions — déjà les défauts
       dataStart = i + 1;
       break;
     }
 
+    // Lire chaque colonne INDÉPENDAMMENT — une valeur dans une colonne
+    // ne dépend pas de la présence d'une valeur dans une autre colonne.
+    // Seule exception : les lignes de paramètres numériques (Periodicite/Alerte)
+    // et les titres en majuscules purs sont ignorés.
+    const s=[], po=[], ro=[], pe=[];
+    const isParamOrTitle = str => {
+      if (!str) return false;
+      if (str.includes('Periodicite') || str.includes('Alerte')) return true;
+      // Titre en majuscules purs (ex: 'PARAMETRES DE REVISION') — contient seulement
+      // des lettres majuscules, espaces, slashes, tirets, et fait > 3 chars
+      return str.length > 3 && str === str.toUpperCase() && !/\d/.test(str);
+    };
+
     for (let i=dataStart; i<rows.length; i++) {
       const r = rows[i];
-      const label = cell(r, colServices);
+      // Paramètres numériques
+      const l0 = cell(r, 0);
+      if (l0.includes('Periodicite')) { params.revisionPeriod = parseInt(r[1]) || 12; continue; }
+      if (l0.includes('Alerte'))      { params.alertDays      = parseInt(r[1]) || 30; continue; }
 
-      // Sauter les lignes de paramètres numériques et les titres de section en majuscules
-      if (!label && !cell(r, colRoles) && !cell(r, colPermissions)) continue; // ligne vide
-      if (label.includes('Periodicite') || label.includes('Alerte')) {
-        if (label.includes('Periodicite')) params.revisionPeriod = parseInt(r[1]) || 12;
-        if (label.includes('Alerte'))      params.alertDays      = parseInt(r[1]) || 30;
-        continue;
-      }
-      // Sauter les lignes dont le label est un titre en majuscules sans données associées
-      // (ex: 'PARAMETRES DE REVISION', 'SERVICES / DEPARTEMENTS' si mal détecté)
-      const isAllCaps = str => str && str === str.toUpperCase() && str.length > 3;
-      if (isAllCaps(label) && !cell(r, colRoles) && !cell(r, colPermissions)) continue;
+      // Lire chaque colonne indépendamment
+      const vs = cell(r, colS);
+      const vp = colPo >= 0 ? cell(r, colPo) : '';
+      const vr = cell(r, colRo);
+      const ve = cell(r, colPe);
 
-      if (label) s.push(label);
-      if (colPostes >= 0 && cell(r, colPostes)) po.push(cell(r, colPostes));
-      if (cell(r, colRoles))       ro.push(cell(r, colRoles));
-      if (cell(r, colPermissions)) pe.push(cell(r, colPermissions));
+      if (vs && !isParamOrTitle(vs)) s.push(vs);
+      if (vp && !isParamOrTitle(vp)) po.push(vp);
+      if (vr && !isParamOrTitle(vr)) ro.push(vr);
+      if (ve && !isParamOrTitle(ve)) pe.push(ve);
     }
+
     params.services    = [...new Set(s)];
     params.postes      = [...new Set(po)];
     params.roles       = [...new Set(ro)];
@@ -1265,15 +1274,25 @@ function buildWorkbook() {
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hRows.length ? hRows : [{ID:'',AgentID:'',LogicielID:'',Agent_Nom:'',Logiciel_Nom:'',Role:'',Permissions:'',Statut:'',Valideur:'',DateCreation:'',DateDerniereModif:'',DateProchRevision:'',DateDerniereValidation:'',Commentaires:''}]), 'Habilitations');
 
-  // Sheet Parametres
+  // Sheet Parametres — chaque liste dans sa propre colonne, indépendamment des autres
+  // Colonnes : A=Services, C=Postes, E=Roles, G=Permissions (colonnes B/D/F/H vides pour lisibilité)
+  const pRows = [['SERVICES','','POSTES','','ROLES','','PERMISSIONS']];
   const maxLen = Math.max(params.services.length, params.postes.length, params.roles.length, params.permissions.length, 1);
-  const pRows = [
-    ['SERVICES','','POSTES','','ROLES','','PERMISSIONS'],
-  ];
-  for (let i=0;i<maxLen;i++) pRows.push([params.services[i]||'','',params.postes[i]||'','',params.roles[i]||'','',params.permissions[i]||'']);
-  pRows.push([]);
-  pRows.push(['Periodicite de revision (mois):', params.revisionPeriod]);
-  pRows.push(['Alerte avant expiration (jours):', params.alertDays]);
+  for (let i=0; i<maxLen; i++) {
+    pRows.push([
+      params.services[i]    != null ? params.services[i]    : '',
+      '',
+      params.postes[i]      != null ? params.postes[i]      : '',
+      '',
+      params.roles[i]       != null ? params.roles[i]       : '',
+      '',
+      params.permissions[i] != null ? params.permissions[i] : ''
+    ]);
+  }
+  // Ligne vide de séparation puis paramètres numériques
+  pRows.push(['', '', '', '', '', '', '']);
+  pRows.push(['Periodicite de revision (mois):', params.revisionPeriod, '', '', '', '', '']);
+  pRows.push(['Alerte avant expiration (jours):', params.alertDays, '', '', '', '', '']);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pRows), 'Parametres');
 
   // Dashboard
@@ -2026,6 +2045,52 @@ function toast(msg, type='info') {
 }
 function showSplashError(msg) { const e=document.getElementById('splashError'); e.textContent=msg; e.classList.add('show'); }
 function hideSplashError() { document.getElementById('splashError').classList.remove('show'); }
+
+// ═══════════════════════
+// DÉCONNEXION
+// ═══════════════════════
+function confirmDisconnect() {
+  if (unsaved) {
+    openConfirmDialog({
+      title: 'Fermer le registre ?',
+      message: "Des modifications non sauvegardées seront perdues. Sauvegardez d'abord (💾) ou confirmez la fermeture.",
+      confirmLabel: 'Fermer sans sauvegarder',
+      confirmClass: 'btn-danger',
+      onConfirm: disconnect
+    });
+  } else {
+    disconnect();
+  }
+}
+
+function disconnect() {
+  // Réinitialiser l'état complet
+  agents = []; logiciels = []; habilitations = [];
+  params = { services:[], postes:[], roles:[], permissions:[], revisionPeriod:12, alertDays:30 };
+  currentFile = null; unsaved = false; pendingSecurityChange = false;
+  agentSortCol = null; agentSortAsc = true;
+  habilSortCol = null; habilSortAsc = true;
+  editingAgentId = null; editingHabilId = null; agentHabilLines = [];
+
+  // Réinitialiser le splash
+  document.getElementById('fileInput').value = '';
+  document.getElementById('splashPwd').value = '';
+  document.getElementById('pwdLengthHint').textContent = '';
+  document.getElementById('splashError').classList.remove('show');
+  encryptCheck.checked = false;
+  encryptToggle.classList.remove('on');
+  pwdField.classList.remove('show');
+  splashFile = null;
+  const dropP = document.querySelector('#fileDrop p');
+  if (dropP) dropP.innerHTML = '<strong>Glissez-déposez</strong> votre fichier ici<br>ou cliquez pour parcourir<br><small style="color:var(--text3)">Formats acceptés : .xlsx · .habil (chiffré)</small>';
+
+  // Revenir à l'écran d'accueil
+  document.getElementById('app').classList.remove('show');
+  const splash = document.getElementById('splash');
+  splash.classList.remove('hidden');
+  // Remettre l'onglet Dashboard actif pour la prochaine session
+  switchTab('dashboard');
+}
 
 // ═══════════════════════
 // EVENTS
