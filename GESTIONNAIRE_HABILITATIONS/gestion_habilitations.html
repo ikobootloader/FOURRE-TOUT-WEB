@@ -606,6 +606,7 @@
               <th onclick="habilSort('logiciel')">Logiciel <span class="sort-icon">↕</span></th>
               <th onclick="habilSort('role')">Rôle <span class="sort-icon">↕</span></th>
               <th onclick="habilSort('permissions')">Permissions <span class="sort-icon">↕</span></th>
+              <th onclick="habilSort('groupe')">Groupe sécurité <span class="sort-icon">↕</span></th>
               <th onclick="habilSort('statut')">Statut <span class="sort-icon">↕</span></th>
               <th onclick="habilSort('valideur')">Responsable valideur <span class="sort-icon">↕</span></th>
               <th onclick="habilSort('revision')">Proch. révision <span class="sort-icon">↕</span></th>
@@ -821,6 +822,12 @@
           <select class="form-control" id="hStatut">
             <option>Actif</option><option>Inactif</option><option>Suspendu</option><option>En attente</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">GROUPE DE SÉCURITÉ</label>
+          <input class="form-control" id="hGroupe" placeholder="Ex : GRP_APP_LECTURE…" list="hGroupeList" autocomplete="off">
+          <datalist id="hGroupeList"></datalist>
+          <div id="hGroupeSuggest" style="font-size:11px;color:var(--text3);margin-top:3px;"></div>
         </div>
         <div class="form-group">
           <label class="form-label">RESPONSABLE VALIDEUR</label>
@@ -1151,7 +1158,8 @@ function parseWorkbook(wb) {
       id: r['ID'] || uid(),
       nom: r['Nom'] || '',
       description: r['Description'] || '',
-      valideurs: r['Valideurs'] ? r['Valideurs'].toString().split('|').map(v=>v.trim()).filter(Boolean) : []
+      valideurs: r['Valideurs'] ? r['Valideurs'].toString().split('|').map(v=>v.trim()).filter(Boolean) : [],
+      groupes: r['Groupes'] ? r['Groupes'].toString().split('|').map(v=>v.trim()).filter(Boolean) : []
     }));
   }
 
@@ -1180,6 +1188,7 @@ function parseWorkbook(wb) {
         role: r['Role'] || '',
         permissions: r['Permissions'] || '',
         statut: r['Statut'] || 'Actif',
+        groupe: r['Groupe'] || '',
         valideur: r['Valideur'] || '',
         dateCreation: norm(r['DateCreation']),
         dateDerniereModif: norm(r['DateDerniereModif']),
@@ -1209,7 +1218,7 @@ function importLegacy(wb) {
     const a = agentMap[key];
     // Crée un logiciel générique si nécessaire
     let log = logiciels.find(l=>l.nom==='(Application générique)');
-    if (!log) { log = { id:uid(), nom:'(Application générique)', description:'Importé depuis un fichier v1', valideurs:[] }; logiciels.push(log); }
+    if (!log) { log = { id:uid(), nom:'(Application générique)', description:'Importé depuis un fichier v1', valideurs:[], groupes:[] }; logiciels.push(log); }
     const norm = s => { if (!s) return ''; if (s instanceof Date) return s.toISOString().split('T')[0]; const d=new Date(s); return isNaN(d)?String(s):d.toISOString().split('T')[0]; };
     habilitations.push({
       id: uid(), agentId: a.id, logicielId: log.id,
@@ -1256,7 +1265,7 @@ function buildWorkbook() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(agentRows.length ? agentRows : [{ ID:'',Nom:'',Prenom:'',Email:'',Service:'',Poste:'' }]), 'Agents');
 
   // Sheet Logiciels
-  const logRows = logiciels.map(l => ({ ID:l.id, Nom:l.nom, Description:l.description, Valideurs:l.valideurs.join('|') }));
+  const logRows = logiciels.map(l => ({ ID:l.id, Nom:l.nom, Description:l.description, Valideurs:l.valideurs.join('|'), Groupes:(l.groupes||[]).join('|') }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(logRows.length ? logRows : [{ ID:'',Nom:'',Description:'',Valideurs:'' }]), 'Logiciels');
 
   // Sheet Habilitations
@@ -1266,7 +1275,7 @@ function buildWorkbook() {
     return {
       ID:h.id, AgentID:h.agentId, LogicielID:h.logicielId,
       Agent_Nom:(a.nom||'')+' '+(a.prenom||''), Agent_Email:a.email||'', Logiciel_Nom:l.nom||'',
-      Role:h.role, Permissions:h.permissions, Statut:h.statut, Valideur:h.valideur,
+      Role:h.role, Permissions:h.permissions, Statut:h.statut, Groupe:h.groupe||'', Valideur:h.valideur,
       DateCreation:h.dateCreation, DateDerniereModif:h.dateDerniereModif,
       DateProchRevision:h.dateProchRevision, DateDerniereValidation:h.dateDerniereValidation,
       Commentaires:h.commentaires
@@ -1488,14 +1497,14 @@ function renderHabilTable() {
   let list = habilitations.filter(h => {
     const a = agents.find(x=>x.id===h.agentId)||{};
     const l = logiciels.find(x=>x.id===h.logicielId)||{};
-    const txt = [a.nom,a.prenom,a.email,l.nom,h.role,h.permissions,h.valideur,h.statut].join(' ').toLowerCase();
+    const txt = [a.nom,a.prenom,a.email,l.nom,h.role,h.permissions,h.groupe||'',h.valideur,h.statut].join(' ').toLowerCase();
     return (!search||txt.includes(search)) && (!fLog||h.logicielId===fLog) && (!fStat||h.statut===fStat);
   });
   if (habilSortCol) {
     const getV = h => {
       const a=agents.find(x=>x.id===h.agentId)||{};
       const l=logiciels.find(x=>x.id===h.logicielId)||{};
-      return ({agent:(a.nom+' '+a.prenom).toLowerCase(),logiciel:(l.nom||'').toLowerCase(),role:(h.role||'').toLowerCase(),permissions:(h.permissions||'').toLowerCase(),statut:(h.statut||'').toLowerCase(),valideur:(h.valideur||'').toLowerCase(),revision:h.dateProchRevision||'9'})[habilSortCol]||'';
+      return ({agent:(a.nom+' '+a.prenom).toLowerCase(),logiciel:(l.nom||'').toLowerCase(),role:(h.role||'').toLowerCase(),permissions:(h.permissions||'').toLowerCase(),groupe:(h.groupe||'').toLowerCase(),statut:(h.statut||'').toLowerCase(),valideur:(h.valideur||'').toLowerCase(),revision:h.dateProchRevision||'9'})[habilSortCol]||'';
     };
     list.sort((a,b) => habilSortAsc ? getV(a).localeCompare(getV(b),'fr') : getV(b).localeCompare(getV(a),'fr'));
   }
@@ -1513,6 +1522,7 @@ function renderHabilTable() {
       <td><span class="badge-logiciel">${l.nom||'?'}</span></td>
       <td class="muted">${h.role||'—'}</td>
       <td class="muted" style="font-size:12px">${h.permissions||'—'}</td>
+      <td class="muted" style="font-size:12px">${h.groupe||'—'}</td>
       <td>${statusBadge(h.statut)}</td>
       <td class="muted">${h.valideur||'—'}</td>
       <td>${dStr}</td>
@@ -1623,6 +1633,14 @@ function renderLogicielsEditor() {
         <input type="text" class="form-control" id="newValideur-${i}" placeholder="Ajouter un valideur…" style="font-size:12px;padding:5px 10px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addValideur(${i});}">
         <button class="btn btn-ghost btn-sm" onclick="addValideur(${i})">＋</button>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin:10px 0 4px;font-weight:600;letter-spacing:0.5px;">GROUPES DE SÉCURITÉ</div>
+      <div class="logiciel-editor-valideurs" id="groupes-${i}">
+        ${(l.groupes||[]).map((g,gi) => `<span class="valideur-chip">${esc(g)}<button onclick="removeGroupe(${i},${gi})">✕</button></span>`).join('')}
+      </div>
+      <div class="add-valideur-row">
+        <input type="text" class="form-control" id="newGroupe-${i}" placeholder="Ajouter un groupe…" style="font-size:12px;padding:5px 10px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addGroupe(${i});}">
+        <button class="btn btn-ghost btn-sm" onclick="addGroupe(${i})">＋</button>
+      </div>
     </div>
   `).join('');
 }
@@ -1630,7 +1648,7 @@ function renderLogicielsEditor() {
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
 function addLogiciel() {
-  logiciels.push({ id:uid(), nom:'Nouveau logiciel', description:'', valideurs:[] });
+  logiciels.push({ id:uid(), nom:'Nouveau logiciel', description:'', valideurs:[], groupes:[] });
   markUnsaved(); renderLogicielsEditor(); populateHabilFilters();
 }
 function confirmDeleteLogiciel(idx) {
@@ -1653,6 +1671,17 @@ function addValideur(logIdx) {
   inp.value=''; markUnsaved(); renderLogicielsEditor();
 }
 function removeValideur(logIdx, valIdx) { logiciels[logIdx].valideurs.splice(valIdx,1); markUnsaved(); renderLogicielsEditor(); }
+function addGroupe(logIdx) {
+  const inp = document.getElementById(`newGroupe-${logIdx}`); if (!inp) return;
+  const v = inp.value.trim(); if (!v) return;
+  if (!logiciels[logIdx].groupes) logiciels[logIdx].groupes = [];
+  if (!logiciels[logIdx].groupes.includes(v)) logiciels[logIdx].groupes.push(v);
+  inp.value=''; markUnsaved(); renderLogicielsEditor();
+}
+function removeGroupe(logIdx, grpIdx) {
+  if (!logiciels[logIdx].groupes) return;
+  logiciels[logIdx].groupes.splice(grpIdx,1); markUnsaved(); renderLogicielsEditor();
+}
 
 // ═══════════════════════
 // MODAL AGENT
@@ -1732,6 +1761,14 @@ function renderHabilLines() {
           </select>
         </div>
         <div class="form-group">
+          <label class="form-label">GROUPE DE SÉCURITÉ</label>
+          <input class="form-control" value="${esc(h.groupe||'')}" placeholder="Ex : GRP_APP_LECTURE…"
+            list="grpList-${i}" autocomplete="off"
+            oninput="agentHabilLines[${i}].groupe=this.value">
+          <datalist id="grpList-${i}">${(log.groupes||[]).map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">${(log.groupes||[]).length ? 'Groupes : '+log.groupes.join(', ') : ''}</div>
+        </div>
+        <div class="form-group">
           <label class="form-label">RESPONSABLE VALIDEUR</label>
           <input class="form-control" value="${esc(h.valideur||'')}" placeholder="Responsable…" oninput="agentHabilLines[${i}].valideur=this.value">
           ${valSuggest}
@@ -1755,7 +1792,7 @@ function addHabilLine() {
     _tmpId: uid(), id: null,
     logicielId: firstLog.id,
     role: params.roles[0]||'', permissions: params.permissions[0]||'',
-    statut: 'Actif', valideur: firstLog.valideurs[0]||'',
+    statut: 'Actif', groupe: '', valideur: firstLog.valideurs[0]||'',
     dateCreation: today(), dateDerniereModif: today(),
     dateProchRevision: addMonths(params.revisionPeriod), dateDerniereValidation: today(),
     commentaires: ''
@@ -1768,7 +1805,17 @@ function removeHabilLine(i) { agentHabilLines.splice(i,1); renderHabilLines(); }
 function onLineLogicielChange(i, logId) {
   agentHabilLines[i].logicielId = logId;
   const log = logiciels.find(x=>x.id===logId);
-  if (log && log.valideurs.length && !agentHabilLines[i].valideur) agentHabilLines[i].valideur = log.valideurs[0];
+  // Pré-remplir le valideur avec le premier valideur du nouveau logiciel,
+  // sauf si l'utilisateur a saisi une valeur qui n'appartient à aucun logiciel connu
+  // (dans ce cas on respecte sa saisie manuelle).
+  if (log) {
+    const currentVal = agentHabilLines[i].valideur || '';
+    const isFromAnyLogiciel = logiciels.some(l => l.valideurs.includes(currentVal));
+    // Si vide, ou si la valeur vient d'un autre logiciel → remplacer par le valideur du nouveau
+    if (!currentVal || isFromAnyLogiciel) {
+      agentHabilLines[i].valideur = log.valideurs.length ? log.valideurs[0] : '';
+    }
+  }
   renderHabilLines();
 }
 
@@ -1800,9 +1847,14 @@ function saveAgent() {
   }
 
   agentHabilLines.forEach(h => {
+    // Mémoriser le groupe dans le logiciel s'il est nouveau
+    if (h.groupe) {
+      const logObj = logiciels.find(x=>x.id===h.logicielId);
+      if (logObj && !logObj.groupes.includes(h.groupe)) { logObj.groupes.push(h.groupe); markUnsaved(); }
+    }
     habilitations.push({
       id: h.id||uid(), agentId, logicielId: h.logicielId,
-      role: h.role, permissions: h.permissions, statut: h.statut, valideur: h.valideur,
+      role: h.role, permissions: h.permissions, statut: h.statut, groupe: h.groupe||'', valideur: h.valideur,
       dateCreation: h.dateCreation||today(), dateDerniereModif: today(),
       dateProchRevision: h.dateProchRevision||addMonths(params.revisionPeriod),
       dateDerniereValidation: h.dateDerniereValidation||today(),
@@ -1840,6 +1892,7 @@ function openHabilModal(habilId=null) {
     setSelectVal('hAgent',h.agentId); setSelectVal('hLogiciel',h.logicielId);
     setSelectVal('hRole',h.role); setSelectVal('hPermissions',h.permissions);
     document.getElementById('hStatut').value = h.statut||'Actif';
+    document.getElementById('hGroupe').value = h.groupe||'';
     document.getElementById('hValideur').value = h.valideur||'';
     document.getElementById('hRevision').value = h.dateProchRevision||'';
     document.getElementById('hDerniereValidation').value = h.dateDerniereValidation||'';
@@ -1847,6 +1900,7 @@ function openHabilModal(habilId=null) {
   } else {
     if (logiciels[0]) { lo.value = logiciels[0].id; onHabilLogicielChange(); }
     document.getElementById('hStatut').value = 'Actif';
+    document.getElementById('hGroupe').value = '';
     document.getElementById('hValideur').value = '';
     document.getElementById('hRevision').value = addMonths(params.revisionPeriod);
     document.getElementById('hDerniereValidation').value = today();
@@ -1859,11 +1913,24 @@ function openHabilModal(habilId=null) {
 function onHabilLogicielChange() {
   const logId = document.getElementById('hLogiciel').value;
   const log = logiciels.find(x=>x.id===logId);
+
+  // Valideurs
   const sug = document.getElementById('hValideurSuggest');
-  if (log && log.valideurs.length) {
-    sug.innerHTML = `Valideurs de ce logiciel : <strong>${log.valideurs.join(', ')}</strong>`;
+  if (log && log.valideurs && log.valideurs.length) {
+    sug.innerHTML = `Valideurs : <strong>${log.valideurs.join(', ')}</strong>`;
     if (!document.getElementById('hValideur').value) document.getElementById('hValideur').value = log.valideurs[0];
   } else { sug.innerHTML = ''; }
+
+  // Groupes de sécurité — alimenter la datalist
+  const dl = document.getElementById('hGroupeList');
+  const gs = document.getElementById('hGroupeSuggest');
+  if (log && log.groupes && log.groupes.length) {
+    dl.innerHTML = log.groupes.map(g=>`<option value="${esc(g)}">`).join('');
+    gs.innerHTML = `Groupes disponibles : <strong>${log.groupes.join(', ')}</strong>`;
+  } else {
+    dl.innerHTML = '';
+    gs.innerHTML = '';
+  }
 }
 
 function closeHabilModal() { document.getElementById('habilModalOverlay').classList.remove('show'); editingHabilId=null; }
@@ -1874,9 +1941,16 @@ function saveHabil() {
   const role = document.getElementById('hRole').value;
   const permissions = document.getElementById('hPermissions').value;
   if (!agentId||!logicielId||!role||!permissions) { toast('Champs obligatoires manquants','error'); return; }
+  // Mémoriser le groupe dans le logiciel s'il est nouveau
+  const groupeSaisi = document.getElementById('hGroupe').value.trim();
+  if (groupeSaisi) {
+    const logObj = logiciels.find(x=>x.id===logicielId);
+    if (logObj && !logObj.groupes.includes(groupeSaisi)) { logObj.groupes.push(groupeSaisi); markUnsaved(); }
+  }
   const h = {
     id: editingHabilId || uid(), agentId, logicielId, role, permissions,
     statut: document.getElementById('hStatut').value,
+    groupe: groupeSaisi,
     valideur: document.getElementById('hValideur').value.trim(),
     dateCreation: editingHabilId ? (habilitations.find(x=>x.id===editingHabilId)||{}).dateCreation||today() : today(),
     dateDerniereModif: today(),
