@@ -13,436 +13,8 @@
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap');
+<link rel="stylesheet" href="css/styles.css">
 
-  :root {
-    --bg:        #f5f4ef;
-    --surface:   #ffffff;
-    --surface2:  #f0efea;
-    --border:    #e2e0d8;
-    --accent:    #1a6b5a;
-    --accent2:   #145548;
-    --accent-light: rgba(26,107,90,.08);
-    --green:     #2d9e6b;
-    --green-bg:  rgba(45,158,107,.12);
-    --orange:    #c47d12;
-    --orange-bg: rgba(196,125,18,.12);
-    --red:       #c43d3d;
-    --red-bg:    rgba(196,61,61,.12);
-    --purple:    #7c5cbf;
-    --purple-bg: rgba(124,92,191,.12);
-    --blue:      #1a6b9e;
-    --blue-bg:   rgba(26,107,158,.12);
-    --text:      #1a1a18;
-    --text2:     #5c5a52;
-    --text3:     #8b8980;
-    --shadow:    0 1px 3px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
-    --shadow-lg: 0 4px 24px rgba(0,0,0,.10);
-    --modal-overlay: rgba(0,0,0,0.45);
-    --dot-color: rgba(26,107,90,.07);
-    --alert-yellow-bg: #fffbeb;
-    --alert-yellow-border: rgba(196,125,18,.35);
-  }
-
-  html[data-theme="dark"] {
-    --bg:        #0d1117;
-    --surface:   #161b22;
-    --surface2:  #1c2330;
-    --border:    #30363d;
-    --accent:    #2f81f7;
-    --accent2:   #388bfd;
-    --accent-light: rgba(47,129,247,.12);
-    --green:     #3fb950;
-    --green-bg:  rgba(63,185,80,.15);
-    --orange:    #d29922;
-    --orange-bg: rgba(210,153,34,.15);
-    --red:       #f85149;
-    --red-bg:    rgba(248,81,73,.15);
-    --purple:    #bc8cff;
-    --purple-bg: rgba(188,140,255,.15);
-    --blue:      #58a6ff;
-    --blue-bg:   rgba(88,166,255,.15);
-    --text:      #e6edf3;
-    --text2:     #8b949e;
-    --text3:     #6e7681;
-    --shadow:    0 8px 32px rgba(0,0,0,0.4);
-    --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
-    --modal-overlay: rgba(0,0,0,0.7);
-    --dot-color: rgba(47,129,247,.04);
-    --alert-yellow-bg: rgba(210,153,34,.08);
-    --alert-yellow-border: rgba(210,153,34,.3);
-  }
-
-  * { margin:0; padding:0; box-sizing:border-box; }
-
-  body, .header, .stat-card, .table-container, .modal, .settings-card,
-  .splash-card, thead th, .badge, .btn, .form-control, tbody tr,
-  .toast, .confirm-box, .file-drop, .encrypt-toggle, .list-item, .nav-tab, .save-indicator {
-    transition: background-color .25s ease, color .25s ease, border-color .25s ease;
-  }
-
-  body {
-    font-family: 'DM Sans', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    font-size: 14px;
-    position: relative;
-  }
-
-  body::before {
-    content: '';
-    position: fixed; inset: 0;
-    background-image: radial-gradient(circle at 1px 1px, var(--dot-color) 1px, transparent 0);
-    background-size: 28px 28px;
-    pointer-events: none;
-    z-index: 0;
-  }
-  #splash, #app { position: relative; z-index: 1; }
-
-  /* SPLASH */
-  #splash {
-    position: fixed; inset: 0; z-index: 1000;
-    background: var(--bg);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 32px;
-    transition: opacity 0.4s;
-  }
-  #splash::before {
-    content: ''; position: absolute; inset: 0;
-    background-image: radial-gradient(circle at 1px 1px, var(--dot-color) 1px, transparent 0);
-    background-size: 28px 28px; pointer-events: none;
-  }
-  #splash > * { position: relative; z-index: 1; }
-  #splash.hidden { opacity:0; pointer-events:none; }
-
-  .splash-logo { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; letter-spacing:4px; text-transform:uppercase; color:var(--text3); }
-  .splash-title { font-family:'Syne',sans-serif; font-size:32px; font-weight:800; color:var(--text); text-align:center; line-height:1.2; }
-  .splash-title span { color:var(--accent); }
-
-  .splash-card {
-    background: var(--surface); border:1px solid var(--border);
-    border-radius:12px; padding:32px; width:440px;
-    display:flex; flex-direction:column; gap:20px; box-shadow:var(--shadow);
-  }
-  .splash-card h3 { font-family:'Syne',sans-serif; font-weight:700; font-size:16px; color:var(--text2); letter-spacing:1px; }
-
-  .file-drop {
-    border:2px dashed var(--border); border-radius:8px; padding:28px;
-    text-align:center; cursor:pointer; transition:all 0.2s; background:var(--bg);
-  }
-  .file-drop:hover, .file-drop.drag { border-color:var(--accent); background:var(--accent-light); }
-  .file-drop input { display:none; }
-  .file-drop-icon { font-size:28px; margin-bottom:8px; }
-  .file-drop p { color:var(--text2); font-size:13px; line-height:1.6; }
-  .file-drop strong { color:var(--text); }
-
-  .encrypt-toggle {
-    display:flex; align-items:center; gap:10px; padding:12px 16px; border-radius:8px;
-    background:var(--surface2); border:1px solid var(--border); cursor:pointer; user-select:none;
-  }
-  .encrypt-toggle input[type=checkbox] { display:none; }
-  .toggle-pill { width:36px; height:20px; border-radius:10px; background:var(--text3); position:relative; transition:background 0.2s; flex-shrink:0; opacity:0.5; }
-  .toggle-pill::after { content:''; position:absolute; width:14px; height:14px; border-radius:50%; background:#fff; top:3px; left:3px; transition:left 0.2s; box-shadow:0 1px 2px rgba(0,0,0,0.2); }
-  .encrypt-toggle.on .toggle-pill { background:var(--accent); opacity:1; }
-  .encrypt-toggle.on .toggle-pill::after { left:19px; }
-  .toggle-text { font-size:13px; color:var(--text2); }
-  .toggle-text strong { color:var(--text); font-weight:500; }
-
-  .pwd-field { display:none; flex-direction:column; gap:8px; }
-  .pwd-field.show { display:flex; }
-  .pwd-field label { font-size:12px; color:var(--text2); letter-spacing:0.5px; }
-  .pwd-field input { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 14px; color:var(--text); font-family:inherit; font-size:14px; outline:none; transition:border-color 0.2s; }
-  .pwd-field input:focus { border-color:var(--accent); }
-
-  .btn {
-    display:inline-flex; align-items:center; justify-content:center; gap:8px;
-    padding:10px 20px; border-radius:8px; border:none; cursor:pointer;
-    font-family:inherit; font-size:14px; font-weight:500;
-    transition:all 0.15s; text-decoration:none;
-  }
-  .btn-primary { background:var(--accent); color:#fff; }
-  .btn-primary:hover { background:var(--accent2); }
-  .btn-ghost { background:transparent; color:var(--text2); border:1px solid var(--border); }
-  .btn-ghost:hover { border-color:var(--text2); color:var(--text); background:var(--surface2); }
-  .btn-danger { background:var(--red-bg); color:var(--red); border:1px solid rgba(196,61,61,0.3); }
-  .btn-danger:hover { background:var(--red); color:#fff; border-color:var(--red); }
-  .btn-success { background:var(--green-bg); color:var(--green); border:1px solid rgba(45,158,107,0.3); }
-  .btn-success:hover { background:var(--green); color:#fff; border-color:var(--green); }
-  .btn-sm { padding:6px 12px; font-size:12px; }
-  .btn-full { width:100%; }
-
-  .splash-error { background:var(--red-bg); border:1px solid rgba(196,61,61,0.3); border-radius:8px; padding:10px 14px; color:var(--red); font-size:13px; display:none; }
-  .splash-error.show { display:block; }
-  .new-file-row { display:flex; gap:8px; }
-
-  /* APP SHELL */
-  #app { display:none; min-height:100vh; }
-  #app.show { display:flex; flex-direction:column; }
-
-  .header {
-    background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px;
-    display:flex; align-items:center; height:56px; flex-shrink:0;
-    position:sticky; top:0; z-index:100;
-  }
-  .header-logo { font-family:'Syne',sans-serif; font-weight:800; font-size:16px; color:var(--text); letter-spacing:-0.3px; margin-right:32px; white-space:nowrap; }
-  .header-logo span { color:var(--accent); }
-
-  .nav-tabs { display:flex; height:100%; flex:1; }
-  .nav-tab { display:flex; align-items:center; gap:7px; padding:0 16px; height:100%; color:var(--text2); font-size:13px; font-weight:500; border-bottom:2px solid transparent; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
-  .nav-tab:hover { color:var(--text); }
-  .nav-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
-  .nav-tab .tab-icon { font-size:14px; }
-
-  .header-actions { display:flex; gap:8px; align-items:center; margin-left:auto; }
-  .save-indicator { font-size:11px; color:var(--text3); padding:4px 8px; border-radius:4px; background:var(--surface2); }
-  .save-indicator.saved { color:var(--green); background:var(--green-bg); }
-
-  .encrypt-indicator { display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:4px 10px; border-radius:99px; background:var(--surface2); color:var(--text2); cursor:pointer; transition:all 0.15s; user-select:none; }
-  .encrypt-indicator:hover { background:var(--accent-light); color:var(--accent); }
-  .encrypt-indicator.locked { background:var(--green-bg); color:var(--green); }
-  .encrypt-indicator.pending { background:var(--orange-bg); color:var(--orange); }
-
-  .btn-primary.btn-attention { animation:pulseAttention 1.6s ease-in-out infinite; }
-  @keyframes pulseAttention { 0%,100%{box-shadow:0 0 0 0 rgba(26,107,90,0.4)} 50%{box-shadow:0 0 0 6px rgba(26,107,90,0)} }
-  html[data-theme="dark"] .btn-primary.btn-attention { animation-name:pulseAttentionDark; }
-  @keyframes pulseAttentionDark { 0%,100%{box-shadow:0 0 0 0 rgba(47,129,247,0.5)} 50%{box-shadow:0 0 0 6px rgba(47,129,247,0)} }
-
-  .theme-toggle { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text2); cursor:pointer; font-size:15px; transition:all 0.15s; position:relative; }
-  .theme-toggle:hover { color:var(--accent); border-color:var(--accent); background:var(--accent-light); }
-  .theme-toggle .theme-icon-sun, .theme-toggle .theme-icon-moon { position:absolute; transition:opacity 0.2s, transform 0.3s; }
-  html:not([data-theme="dark"]) .theme-toggle .theme-icon-sun { opacity:0; transform:rotate(180deg) scale(0.5); }
-  html:not([data-theme="dark"]) .theme-toggle .theme-icon-moon { opacity:1; }
-  html[data-theme="dark"] .theme-toggle .theme-icon-sun { opacity:1; }
-  html[data-theme="dark"] .theme-toggle .theme-icon-moon { opacity:0; transform:rotate(-180deg) scale(0.5); }
-  .theme-toggle-floating { position:absolute; top:24px; right:24px; width:38px; height:38px; font-size:17px; z-index:2; }
-
-  /* MAIN */
-  .main { flex:1; padding:24px; overflow-y:auto; }
-  .page { display:none; }
-  .page.active { display:block; }
-
-  .page-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; gap:16px; flex-wrap:wrap; }
-  .page-title { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:var(--text); }
-  .page-subtitle { color:var(--text2); font-size:13px; margin-top:4px; }
-  .page-header-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-
-  /* STATS */
-  .stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
-  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 20px; transition:border-color 0.2s; }
-  .stat-card:hover { border-color:var(--accent); }
-  .stat-label { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
-  .stat-value { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; color:var(--text); line-height:1; }
-  .stat-value.green { color:var(--green); }
-  .stat-value.orange { color:var(--orange); }
-  .stat-value.red { color:var(--red); }
-  .stat-value.purple { color:var(--purple); }
-  .stat-value.blue { color:var(--blue); }
-  .stat-sub { font-size:11px; color:var(--text3); margin-top:4px; }
-
-  /* TABLE */
-  .table-container { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
-  .table-toolbar { display:flex; align-items:center; gap:12px; padding:14px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
-  .search-box { display:flex; align-items:center; gap:8px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:7px 12px; flex:1; min-width:200px; max-width:340px; transition:border-color 0.2s; }
-  .search-box:focus-within { border-color:var(--accent); }
-  .search-box input { background:transparent; border:none; outline:none; color:var(--text); font-family:inherit; font-size:13px; flex:1; }
-  .search-box input::placeholder { color:var(--text3); }
-  .search-icon { color:var(--text3); font-size:13px; }
-
-  .filter-select { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:7px 12px; color:var(--text); font-family:inherit; font-size:13px; outline:none; cursor:pointer; transition:border-color 0.2s; }
-  .filter-select:focus { border-color:var(--accent); }
-
-  .table-wrap { overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  thead th { background:var(--surface2); padding:10px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:0.8px; border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
-  thead th:hover { color:var(--text); }
-  thead th .sort-icon { margin-left:4px; opacity:0.4; }
-  thead th.sorted .sort-icon { opacity:1; color:var(--accent); }
-  thead th.no-sort { cursor:default; }
-
-  tbody tr { border-bottom:1px solid var(--border); transition:background 0.1s; }
-  tbody tr:last-child { border-bottom:none; }
-  tbody tr:hover { background:var(--surface2); }
-  tbody td { padding:10px 14px; color:var(--text); vertical-align:middle; }
-  tbody td.muted { color:var(--text2); font-size:12px; }
-
-  .badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:99px; font-size:11px; font-weight:600; letter-spacing:0.3px; white-space:nowrap; }
-  .badge-actif   { background:var(--green-bg);  color:var(--green);  }
-  .badge-inactif { background:var(--surface2);  color:var(--text2);  }
-  .badge-suspendu{ background:var(--red-bg);    color:var(--red);    }
-  .badge-attente { background:var(--orange-bg); color:var(--orange); }
-  .badge-logiciel { background:var(--blue-bg); color:var(--blue); font-size:10px; padding:2px 7px; border-radius:4px; font-weight:500; margin:1px; display:inline-flex; }
-
-  .row-actions { display:flex; gap:6px; align-items:center; opacity:0; transition:opacity 0.15s; }
-  tbody tr:hover .row-actions { opacity:1; }
-  .action-btn { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:none; cursor:pointer; font-size:13px; transition:all 0.15s; background:var(--surface); color:var(--text2); }
-  .action-btn:hover { background:var(--border); color:var(--text); }
-  .action-btn.del:hover { background:var(--red-bg); color:var(--red); }
-
-  .alert-row { background:var(--orange-bg) !important; }
-  .alert-row:hover { filter:brightness(0.97); }
-  html[data-theme="dark"] .alert-row:hover { filter:brightness(1.15); }
-
-  /* MODAL */
-  .modal-overlay { position:fixed; inset:0; z-index:500; background:var(--modal-overlay); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; padding:20px; }
-  .modal-overlay.show { display:flex; }
-  .modal { background:var(--surface); border:1px solid var(--border); border-radius:14px; width:100%; max-width:720px; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-lg); animation:modalIn 0.2s ease; }
-  @keyframes modalIn { from{opacity:0;transform:scale(0.96) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
-  .modal-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface); z-index:1; }
-  .modal-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; color:var(--text); }
-  .modal-subtitle { font-size:12px; color:var(--text3); margin-top:2px; }
-  .modal-close { background:transparent; border:none; color:var(--text2); font-size:20px; cursor:pointer; padding:4px 8px; border-radius:6px; transition:all 0.15s; }
-  .modal-close:hover { background:var(--surface2); color:var(--text); }
-  .modal-body { padding:24px; }
-  .modal-footer { display:flex; gap:10px; justify-content:flex-end; padding:16px 24px; border-top:1px solid var(--border); position:sticky; bottom:0; background:var(--surface); }
-
-  /* FORM */
-  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .form-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
-  .form-group { display:flex; flex-direction:column; gap:6px; }
-  .form-group.full { grid-column:1 / -1; }
-  .form-label { font-size:12px; font-weight:600; color:var(--text2); letter-spacing:0.5px; }
-  .form-label .required { color:var(--red); margin-left:2px; }
-  .form-control { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 12px; color:var(--text); font-family:inherit; font-size:13px; outline:none; transition:border-color 0.2s; width:100%; }
-  .form-control:focus { border-color:var(--accent); }
-  .form-control::placeholder { color:var(--text3); }
-  select.form-control { cursor:pointer; }
-  textarea.form-control { resize:vertical; min-height:80px; }
-
-  .form-section { margin-bottom:20px; }
-  .form-section-title { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
-
-  /* Habilitation lines dans la modale agent */
-  .habil-lines { display:flex; flex-direction:column; gap:10px; }
-  .habil-line {
-    background:var(--surface2); border:1px solid var(--border);
-    border-radius:10px; padding:14px; position:relative;
-    animation:fadeIn 0.15s;
-  }
-  .habil-line-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-  .habil-line-num { width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .habil-line-title { font-size:13px; font-weight:600; color:var(--text); flex:1; }
-  .habil-line-del { background:transparent; border:none; color:var(--text3); cursor:pointer; padding:4px 6px; border-radius:5px; font-size:13px; transition:all 0.15s; }
-  .habil-line-del:hover { color:var(--red); background:var(--red-bg); }
-  .add-habil-btn { border:2px dashed var(--border); border-radius:10px; padding:12px; text-align:center; cursor:pointer; color:var(--text3); font-size:13px; transition:all 0.2s; background:transparent; width:100%; }
-  .add-habil-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-light); }
-
-  /* Info card logiciel dans le registre */
-  .logiciel-card {
-    background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px;
-    display:flex; align-items:center; gap:10px;
-  }
-  .logiciel-icon { font-size:18px; }
-  .logiciel-name { font-size:13px; font-weight:600; color:var(--text); }
-  .logiciel-valideurs { font-size:11px; color:var(--text3); margin-top:1px; }
-
-  /* TOAST */
-  #toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
-  .toast { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 18px; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow); min-width:280px; animation:toastIn 0.25s ease; font-size:13px; }
-  @keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
-  .toast.success { border-color:var(--green); }
-  .toast.error { border-color:var(--red); }
-  .toast.info { border-color:var(--accent); }
-  .toast-icon { font-size:16px; }
-
-  /* SETTINGS */
-  .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-  .settings-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px; }
-  .settings-card h3 { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; margin-bottom:16px; color:var(--text); }
-  .settings-card.full { grid-column:1 / -1; }
-
-  .list-editor { display:flex; flex-direction:column; gap:6px; }
-  .list-item { display:flex; align-items:center; gap:8px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:13px; animation:fadeIn 0.15s; }
-  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-  .list-item span { flex:1; }
-  .list-item button { background:transparent; border:none; color:var(--text3); cursor:pointer; padding:2px 5px; border-radius:4px; font-size:12px; transition:all 0.15s; }
-  .list-item button:hover { color:var(--red); background:var(--red-bg); }
-  .add-item-row { display:flex; gap:6px; margin-top:8px; }
-  .add-item-row input { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:7px 10px; color:var(--text); font-family:inherit; font-size:13px; outline:none; transition:border-color 0.2s; }
-  .add-item-row input:focus { border-color:var(--accent); }
-
-  /* Logiciels table in settings */
-  .logiciels-table table { width:100%; }
-  .logiciels-table thead th { background:var(--surface2); }
-
-  /* Logiciel editor card */
-  .logiciel-editor-card {
-    background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 14px;
-    margin-bottom:8px; animation:fadeIn 0.15s;
-  }
-  .logiciel-editor-top { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
-  .logiciel-editor-top input { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:7px 10px; color:var(--text); font-family:inherit; font-size:13px; outline:none; transition:border-color 0.2s; }
-  .logiciel-editor-top input:focus { border-color:var(--accent); }
-  .logiciel-editor-valideurs { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
-  .valideur-chip { display:inline-flex; align-items:center; gap:4px; background:var(--accent-light); border:1px solid var(--accent); border-color:rgba(26,107,90,0.25); border-radius:99px; padding:2px 8px; font-size:12px; color:var(--accent); }
-  html[data-theme="dark"] .valideur-chip { border-color:rgba(47,129,247,0.3); }
-  .valideur-chip button { background:none; border:none; color:inherit; cursor:pointer; font-size:11px; opacity:0.7; padding:0 0 0 2px; }
-  .valideur-chip button:hover { opacity:1; }
-  .add-valideur-row { display:flex; gap:6px; }
-
-  /* Revisions */
-  .revision-alert { background:var(--alert-yellow-bg); border:1px solid var(--alert-yellow-border); border-radius:10px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px; font-size:13px; }
-  .revision-alert .alert-icon { font-size:18px; }
-  .revision-alert .alert-text strong { color:var(--orange); }
-
-  /* SECURITY */
-  .security-status { display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:10px; background:var(--surface2); border:1px solid var(--border); margin-bottom:14px; }
-  .security-status.encrypted { background:var(--green-bg); border-color:rgba(45,158,107,0.3); }
-  .security-status-icon { font-size:26px; flex-shrink:0; }
-  .security-status-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; color:var(--text); margin-bottom:2px; }
-  .security-status.encrypted .security-status-title { color:var(--green); }
-  .security-status-sub { font-size:12px; color:var(--text2); line-height:1.5; }
-  .security-warn { display:flex; gap:12px; align-items:flex-start; background:var(--alert-yellow-bg); border:1px solid var(--alert-yellow-border); border-radius:10px; padding:12px 14px; margin-bottom:14px; font-size:13px; color:var(--text); }
-  .security-warn strong { color:var(--orange); }
-  .pwd-form { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:10px; animation:slideDown 0.2s ease; }
-  @keyframes slideDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
-  .pwd-form-title { font-size:12px; font-weight:700; color:var(--text); letter-spacing:0.5px; }
-  .pwd-form-hint { font-size:11px; color:var(--text3); margin-top:-4px; }
-  .pwd-row { display:flex; gap:8px; }
-  .pwd-row .form-control { flex:1; }
-  .pwd-show-btn { background:var(--surface); border:1px solid var(--border); color:var(--text2); border-radius:8px; padding:0 10px; cursor:pointer; font-size:13px; transition:all 0.15s; }
-  .pwd-show-btn:hover { color:var(--accent); border-color:var(--accent); }
-  .pwd-form-actions { display:flex; gap:8px; margin-top:4px; }
-  .pwd-form-actions .btn { flex:1; }
-
-  /* EMPTY */
-  .empty-state { text-align:center; padding:60px 20px; color:var(--text2); }
-  .empty-state .empty-icon { font-size:40px; margin-bottom:12px; }
-  .empty-state p { font-size:14px; }
-
-  .divider { height:1px; background:var(--border); margin:16px 0; }
-
-  /* CONFIRM */
-  .confirm-overlay { position:fixed; inset:0; z-index:600; background:var(--modal-overlay); display:none; align-items:center; justify-content:center; }
-  .confirm-overlay.show { display:flex; }
-  .confirm-box { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:400px; width:90%; text-align:center; box-shadow:var(--shadow-lg); }
-  .confirm-box h3 { font-family:'Syne',sans-serif; font-size:17px; margin-bottom:10px; }
-  .confirm-box p { color:var(--text2); font-size:13px; line-height:1.6; margin-bottom:20px; }
-  .confirm-btns { display:flex; gap:10px; justify-content:center; }
-
-  /* Vue détail agent */
-  .detail-habil-grid { display:flex; flex-direction:column; gap:10px; margin-top:16px; }
-  .detail-habil-card {
-    background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px;
-    display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; align-items:center;
-  }
-  .detail-habil-soft { font-weight:600; color:var(--text); font-size:13px; }
-  .detail-habil-soft small { display:block; font-size:11px; color:var(--text3); font-weight:400; }
-
-  /* Tag alerte count */
-  .tab-badge { background:var(--orange); color:#fff; font-size:10px; padding:1px 6px; border-radius:99px; margin-left:2px; }
-
-  @media (max-width:768px) {
-    .form-grid,.form-grid-3 { grid-template-columns:1fr; }
-    .settings-grid { grid-template-columns:1fr; }
-    .stats-grid { grid-template-columns:repeat(2,1fr); }
-    .header-logo { font-size:13px; }
-    .nav-tab { padding:0 10px; font-size:12px; }
-    .main { padding:16px; }
-    .detail-habil-card { grid-template-columns:1fr 1fr; }
-  }
-</style>
 </head>
 <body>
 
@@ -459,16 +31,17 @@
       <input type="file" id="fileInput" accept=".xlsx,.habil">
       <div class="file-drop-icon">📋</div>
       <p><strong>Glissez-déposez</strong> votre fichier ici<br>ou cliquez pour parcourir<br>
-      <small style="color:var(--text3)">Formats acceptés : .xlsx · .habil (chiffré)</small></p>
+      <small style="color:var(--text3)">Formats acceptés : .xlsx (import) · .habil (chiffré)</small></p>
     </div>
-    <label class="encrypt-toggle" id="encryptToggle">
-      <input type="checkbox" id="encryptCheck">
-      <div class="toggle-pill"></div>
-      <div class="toggle-text"><strong>Chiffrement AES-256</strong><br>
-      <span style="font-size:11px">Le fichier sera illisible sans cette application et le mot de passe</span></div>
-    </label>
-    <div class="pwd-field" id="pwdField">
-      <label id="pwdFieldLabel">MOT DE PASSE</label>
+    <div style="padding:12px;background:var(--green-bg);border:1px solid var(--green);border-radius:10px;margin:14px 0;font-size:12px;color:var(--text);line-height:1.6;">
+      <strong>🔒 Chiffrement AES-256 obligatoire</strong><br>
+      <span style="color:var(--text2)">Tous les fichiers .habil sont chiffrés. Un mot de passe vous sera demandé à la création et à chaque ouverture.</span>
+    </div>
+    <div class="pwd-field" id="pwdField" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <label id="pwdFieldLabel" style="margin:0;">MOT DE PASSE (REQUIS)</label>
+        <a href="javascript:void(0)" onclick="showRecoveryModal()" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;">🔑 Mot de passe oublié ?</a>
+      </div>
       <div style="display:flex;gap:6px;align-items:stretch;">
         <input type="password" id="splashPwd" placeholder="Entrez votre mot de passe…"
           autocomplete="current-password"
@@ -504,6 +77,7 @@
       <span class="encrypt-indicator" id="encryptIndicator" onclick="switchTab('settings')">
         <span id="encIcon">🔓</span><span id="encLabel">Non chiffré</span>
       </span>
+      <span class="autosave-indicator" id="autosaveIndicator" style="display:none;" title="Sauvegarde automatique en cours">↻</span>
       <button class="theme-toggle" onclick="toggleTheme()"><span class="theme-icon-sun">☀</span><span class="theme-icon-moon">☾</span></button>
       <button class="btn btn-ghost btn-sm" onclick="exportFile()">⬇ Export audit (.xlsx)</button>
       <button class="btn btn-primary btn-sm" onclick="saveFile()" id="saveBtn">💾 Sauvegarder</button>
@@ -526,7 +100,32 @@
           <button class="btn btn-primary btn-sm" onclick="openHabilModal()">＋ Nouvelle habilitation</button>
         </div>
       </div>
-      <div class="stats-grid" id="statsGrid"></div>
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-value" id="statAgents">0</div>
+          <div class="stat-label">Agents</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statLogiciels">0</div>
+          <div class="stat-label">Logiciels</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalHabils">0</div>
+          <div class="stat-label">Habilitations</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statActifs">0</div>
+          <div class="stat-label">Actives</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statRevisions">0</div>
+          <div class="stat-label">À réviser</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statUrgent">0</div>
+          <div class="stat-label">Urgentes (J-7)</div>
+        </div>
+      </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;" id="dbGrids">
         <div class="table-container">
           <div class="table-toolbar"><span style="font-size:12px;color:var(--text2);font-weight:600;">DERNIERS AGENTS</span></div>
@@ -554,9 +153,9 @@
         <div class="table-toolbar">
           <div class="search-box">
             <span class="search-icon">🔍</span>
-            <input type="text" id="agentSearch" placeholder="Nom, email, service…" oninput="renderAgentsTable()">
+            <input type="text" id="agentSearch" placeholder="Nom, email, service…" oninput="PaginationManager.reset('agents'); renderAgentsTable()">
           </div>
-          <select class="filter-select" id="agentFilterService" onchange="renderAgentsTable()">
+          <select class="filter-select" id="agentFilterService" onchange="PaginationManager.reset('agents'); renderAgentsTable()">
             <option value="">Tous les services</option>
           </select>
           <span id="agentCount" style="margin-left:auto;font-size:12px;color:var(--text3);"></span>
@@ -574,6 +173,7 @@
             <tbody id="agentsBody"></tbody>
           </table>
         </div>
+        <div class="pagination-container" id="agentsPagination"></div>
       </div>
     </div>
 
@@ -590,10 +190,10 @@
         <div class="table-toolbar">
           <div class="search-box">
             <span class="search-icon">🔍</span>
-            <input type="text" id="habilSearch" placeholder="Agent, logiciel, rôle…" oninput="renderHabilTable()">
+            <input type="text" id="habilSearch" placeholder="Agent, logiciel, rôle…" oninput="PaginationManager.reset('habilitations'); renderHabilTable()">
           </div>
-          <select class="filter-select" id="habilFilterLogiciel" onchange="renderHabilTable()"><option value="">Tous les logiciels</option></select>
-          <select class="filter-select" id="habilFilterStatut" onchange="renderHabilTable()">
+          <select class="filter-select" id="habilFilterLogiciel" onchange="PaginationManager.reset('habilitations'); renderHabilTable()"><option value="">Tous les logiciels</option></select>
+          <select class="filter-select" id="habilFilterStatut" onchange="PaginationManager.reset('habilitations'); renderHabilTable()">
             <option value="">Tous les statuts</option>
             <option>Actif</option><option>Inactif</option><option>Suspendu</option><option>En attente</option>
           </select>
@@ -615,6 +215,7 @@
             <tbody id="habilBody"></tbody>
           </table>
         </div>
+        <div class="pagination-container" id="habilPagination"></div>
       </div>
     </div>
 
@@ -630,7 +231,7 @@
       <div class="table-container">
         <div class="table-toolbar">
           <span style="font-size:12px;color:var(--text2);font-weight:600;">HABILITATIONS À RÉVISER</span>
-          <select class="filter-select" id="revFilterLogiciel" onchange="renderRevisions()"><option value="">Tous les logiciels</option></select>
+          <select class="filter-select" id="revFilterLogiciel" onchange="PaginationManager.reset('revisions'); renderRevisions()"><option value="">Tous les logiciels</option></select>
           <span id="revCount" style="margin-left:auto;font-size:12px;color:var(--text3);"></span>
         </div>
         <div class="table-wrap">
@@ -640,6 +241,7 @@
           </tr></thead>
           <tbody id="revisionBody"></tbody></table>
         </div>
+        <div class="pagination-container" id="revisionsPagination"></div>
       </div>
     </div>
 
@@ -867,1320 +469,120 @@
   </div>
 </div>
 
-<div id="toast-container"></div>
-
-<script>
-// ═══════════════════════
-// ÉTAT GLOBAL
-// ═══════════════════════
-/*
-  Structure de données v2 :
-
-  agents[] = {
-    id, nom, prenom, email, service, poste
-  }
-
-  logiciels[] = {
-    id, nom, description, valideurs: []  ← valideurs par défaut
-  }
-
-  habilitations[] = {
-    id, agentId, logicielId,
-    role, permissions, statut, valideur,
-    dateCreation, dateDerniereModif, dateProchRevision, dateDerniereValidation,
-    commentaires
-  }
-
-  params = {
-    services[], postes[], roles[], permissions[],
-    revisionPeriod, alertDays
-  }
-*/
-let agents = [];
-let logiciels = [];
-let habilitations = [];
-let params = {
-  services: [], postes: [], roles: [], permissions: [],
-  revisionPeriod: 12, alertDays: 30
-};
-let currentFile = null;
-let unsaved = false;
-let pendingSecurityChange = false;
-
-// Sort states
-let agentSortCol = null, agentSortAsc = true;
-let habilSortCol = null, habilSortAsc = true;
-
-// Edit states
-let editingAgentId = null;
-let editingHabilId = null;
-let agentHabilLines = [];   // lignes temporaires dans la modale agent
-
-// ═══════════════════════
-// UTILITAIRES
-// ═══════════════════════
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); }
-function today() { return new Date().toISOString().split('T')[0]; }
-function addMonths(months) {
-  const d = new Date(); d.setMonth(d.getMonth() + months);
-  return d.toISOString().split('T')[0];
-}
-function daysUntil(dateStr) {
-  if (!dateStr) return 9999;
-  const d = new Date(dateStr); if (isNaN(d)) return 9999;
-  return Math.ceil((d - new Date()) / 86400000);
-}
-function fmtDate(s) {
-  if (!s) return '—'; const d = new Date(s); if (isNaN(d)) return s;
-  return d.toLocaleDateString('fr-FR');
-}
-function statusBadge(s) {
-  const map = { 'Actif':'actif','Inactif':'inactif','Suspendu':'suspendu','En attente':'attente' };
-  return `<span class="badge badge-${map[s]||'inactif'}">${s||'—'}</span>`;
-}
-function agentName(id) {
-  const a = agents.find(x=>x.id===id);
-  return a ? `${a.nom} ${a.prenom}` : '—';
-}
-function logicielName(id) {
-  const l = logiciels.find(x=>x.id===id);
-  return l ? l.nom : '—';
-}
-function agentHabils(agentId) {
-  return habilitations.filter(h=>h.agentId===agentId);
-}
-
-// ═══════════════════════
-// THÈME
-// ═══════════════════════
-function toggleTheme() {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  if (isDark) document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme','dark');
-  try { localStorage.setItem('habil_theme', isDark ? 'light' : 'dark'); } catch(e) {}
-}
-
-// ═══════════════════════
-// CRYPTO
-// ═══════════════════════
-async function deriveKey(password, salt) {
-  const enc = new TextEncoder();
-  const keyMat = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    { name:'PBKDF2', salt, iterations:200000, hash:'SHA-256' },
-    keyMat, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
-  );
-}
-async function encryptBytes(bytes, password) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv   = crypto.getRandomValues(new Uint8Array(12));
-  const key  = await deriveKey(password, salt);
-  const ct   = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, bytes);
-  const magic = new TextEncoder().encode('HAB1');
-  const result = new Uint8Array(4+16+12+ct.byteLength);
-  result.set(magic,0); result.set(salt,4); result.set(iv,20); result.set(new Uint8Array(ct),32);
-  return result;
-}
-async function decryptBytes(bytes, password) {
-  if (!window.crypto || !window.crypto.subtle) {
-    throw new Error('Web Crypto API indisponible dans ce navigateur.');
-  }
-  if (bytes.byteLength < 48) {
-    throw new Error('Fichier trop court ou tronqué — format .habil invalide.');
-  }
-  const magic = new TextDecoder().decode(bytes.slice(0, 4));
-  if (magic !== 'HAB1') {
-    const pk = String.fromCharCode(bytes[0], bytes[1]);
-    if (pk === 'PK') throw new Error('Ce fichier est un .xlsx non chiffré. Ouvrez-le sans mot de passe.');
-    throw new Error("Format invalide — ce fichier n'a pas été produit par cette application.");
-  }
-  const salt = bytes.slice(4, 20);
-  const iv   = bytes.slice(20, 32);
-  const ct   = bytes.slice(32);
-  const key  = await deriveKey(password, salt);
-  try {
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-    return new Uint8Array(pt);
-  } catch(e) {
-    throw new Error('Mot de passe incorrect ou fichier corrompu.');
-  }
-}
-
-// ═══════════════════════
-// SPLASH
-// ═══════════════════════
-let splashFile = null;
-const encryptToggle = document.getElementById('encryptToggle');
-const encryptCheck  = document.getElementById('encryptCheck');
-const pwdField      = document.getElementById('pwdField');
-
-encryptToggle.addEventListener('click', () => {
-  if (splashFile && splashFile.name.toLowerCase().endsWith('.habil')) return;
-  encryptCheck.checked = !encryptCheck.checked;
-  encryptToggle.classList.toggle('on', encryptCheck.checked);
-  pwdField.classList.toggle('show', encryptCheck.checked);
-});
-
-const fileDrop = document.getElementById('fileDrop');
-fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('drag'); });
-fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('drag'));
-fileDrop.addEventListener('drop', e => {
-  e.preventDefault(); fileDrop.classList.remove('drag');
-  const f = e.dataTransfer.files[0];
-  if (f) { document.getElementById('fileInput').files = e.dataTransfer.files; onSplashFile(f); }
-});
-document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) onSplashFile(e.target.files[0]); });
-document.getElementById('splashPwd').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); loadFile(); } });
-document.getElementById('splashPwd').addEventListener('input', () => {
-  const len = document.getElementById('splashPwd').value.length;
-  const hint = document.getElementById('pwdLengthHint');
-  if (!hint) return;
-  if (len === 0) { hint.textContent = ''; return; }
-  hint.textContent = len + ' caractère' + (len > 1 ? 's' : '') + ' saisi' + (len > 1 ? 's' : '');
-  hint.style.color = len >= 4 ? 'var(--green)' : 'var(--orange)';
-});
-
-function onSplashFile(file) {
-  splashFile = file;
-  hideSplashError();
-  const isEnc = file.name.toLowerCase().endsWith('.habil');
-  if (isEnc) {
-    encryptCheck.checked = true; encryptToggle.classList.add('on'); pwdField.classList.add('show');
-    encryptToggle.title = 'Fichier chiffré — saisissez le mot de passe';
-  } else {
-    encryptToggle.title = 'Activer le chiffrement AES-256';
-  }
-  const p = fileDrop.querySelector('p');
-  if (p) p.innerHTML = `<strong>${file.name}</strong><br><small style="color:var(--text2)">${(file.size/1024).toFixed(1)} Ko · ${isEnc ? '🔒 Chiffré' : '📄 En clair'}</small><br><small style="color:var(--text3)">Cliquez pour changer</small>`;
-}
-
-async function loadFile() {
-  const fi = document.getElementById('fileInput');
-  if (!fi.files[0]) { showSplashError('Sélectionnez un fichier ou créez un registre vierge.'); return; }
-  await processFile(fi.files[0]);
-}
-
-async function processFile(file) {
-  hideSplashError();
-  const isEnc = file.name.toLowerCase().endsWith('.habil');
-  const willEnc = encryptCheck.checked;
-  const pwd = document.getElementById('splashPwd').value.trim();
-  if ((isEnc || willEnc) && !pwd) {
-    showSplashError(isEnc ? 'Ce fichier est chiffré. Saisissez le mot de passe.' : 'Activez le chiffrement : choisissez un mot de passe.');
-    pwdField.classList.add('show'); document.getElementById('splashPwd').focus(); return;
-  }
-  if (willEnc && !isEnc && pwd.length < 4) { showSplashError('Mot de passe : 4 caractères minimum.'); return; }
-  try {
-    const ab = await file.arrayBuffer();
-    const xlsxBytes = isEnc ? await decryptBytes(new Uint8Array(ab), pwd) : new Uint8Array(ab);
-    const wb = XLSX.read(xlsxBytes, { type:'array', cellDates:true });
-    parseWorkbook(wb);
-    const finalEnc = isEnc || willEnc;
-    currentFile = { name: file.name, encrypted: finalEnc, password: finalEnc ? pwd : '' };
-    launchApp();
-    if (!isEnc && willEnc) { pendingSecurityChange = true; markUnsaved(); setTimeout(()=>toast('Chiffrement activé — sauvegardez pour produire le .habil','info'),400); }
-  } catch(e) {
-    console.warn('[Habilitations]', e.message || e);
-    showSplashError('Erreur : ' + (e.message || 'Impossible de lire le fichier.'));
-  }
-}
-
-// ═══════════════════════
-// PARSE WORKBOOK v2
-// ═══════════════════════
-function parseWorkbook(wb) {
-  // --- Params ---
-  if (wb.SheetNames.includes('Parametres')) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets['Parametres'], { header:1, defval:'' });
-    const cell = (r, v) => (r && r[v] != null) ? r[v].toString().trim() : '';
-
-    // Détecter la ligne d'en-têtes et le mapping de colonnes
-    // Format v2 : ['SERVICES','','POSTES','','ROLES','','PERMISSIONS']
-    // Format v1 : ['SERVICES / DEPARTEMENTS','','ROLES DISPONIBLES','','NIVEAUX DE PERMISSIONS',...]
-    let dataStart = 1;
-    let colS=0, colPo=2, colRo=4, colPe=6;  // défauts v2
-
-    for (let i=0; i<Math.min(rows.length, 5); i++) {
-      const h0 = cell(rows[i], 0).toUpperCase();
-      const h2 = cell(rows[i], 2).toUpperCase();
-      if (!h0.includes('SERVICE')) continue;
-      if (h2.includes('ROLE') || h2.includes('RÔLE')) {
-        // Format v1 : pas de colonne Postes
-        colPo = -1; colRo = 2; colPe = 4;
-      }
-      dataStart = i + 1;
-      break;
-    }
-
-    // Lire chaque colonne INDÉPENDAMMENT — une valeur dans une colonne
-    // ne dépend pas de la présence d'une valeur dans une autre colonne.
-    // Seule exception : les lignes de paramètres numériques (Periodicite/Alerte)
-    // et les titres en majuscules purs sont ignorés.
-    const s=[], po=[], ro=[], pe=[];
-    const isParamOrTitle = str => {
-      if (!str) return false;
-      if (str.includes('Periodicite') || str.includes('Alerte')) return true;
-      // Titre en majuscules purs (ex: 'PARAMETRES DE REVISION') — contient seulement
-      // des lettres majuscules, espaces, slashes, tirets, et fait > 3 chars
-      return str.length > 3 && str === str.toUpperCase() && !/\d/.test(str);
-    };
-
-    for (let i=dataStart; i<rows.length; i++) {
-      const r = rows[i];
-      // Paramètres numériques
-      const l0 = cell(r, 0);
-      if (l0.includes('Periodicite')) { params.revisionPeriod = parseInt(r[1]) || 12; continue; }
-      if (l0.includes('Alerte'))      { params.alertDays      = parseInt(r[1]) || 30; continue; }
-
-      // Lire chaque colonne indépendamment
-      const vs = cell(r, colS);
-      const vp = colPo >= 0 ? cell(r, colPo) : '';
-      const vr = cell(r, colRo);
-      const ve = cell(r, colPe);
-
-      if (vs && !isParamOrTitle(vs)) s.push(vs);
-      if (vp && !isParamOrTitle(vp)) po.push(vp);
-      if (vr && !isParamOrTitle(vr)) ro.push(vr);
-      if (ve && !isParamOrTitle(ve)) pe.push(ve);
-    }
-
-    params.services    = [...new Set(s)];
-    params.postes      = [...new Set(po)];
-    params.roles       = [...new Set(ro)];
-    params.permissions = [...new Set(pe)];
-  }
-
-  // --- Logiciels ---
-  agents = []; logiciels = []; habilitations = [];
-  if (wb.SheetNames.includes('Logiciels')) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets['Logiciels'], { defval:'' });
-    logiciels = rows.map(r => ({
-      id: r['ID'] || uid(),
-      nom: r['Nom'] || '',
-      description: r['Description'] || '',
-      valideurs: r['Valideurs'] ? r['Valideurs'].toString().split('|').map(v=>v.trim()).filter(Boolean) : [],
-      groupes: r['Groupes'] ? r['Groupes'].toString().split('|').map(v=>v.trim()).filter(Boolean) : []
-    }));
-  }
-
-  // --- Agents ---
-  if (wb.SheetNames.includes('Agents')) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets['Agents'], { defval:'' });
-    agents = rows.map(r => ({
-      id: r['ID'] || uid(),
-      nom: r['Nom'] || '',
-      prenom: r['Prenom'] || '',
-      email: r['Email'] || '',
-      service: r['Service'] || '',
-      poste: r['Poste'] || ''
-    }));
-  }
-
-  // --- Habilitations ---
-  if (wb.SheetNames.includes('Habilitations')) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets['Habilitations'], { defval:'', cellDates:true });
-    habilitations = rows.map(r => {
-      const norm = s => { if (!s) return ''; if (s instanceof Date) return s.toISOString().split('T')[0]; const d=new Date(s); return isNaN(d)?String(s):d.toISOString().split('T')[0]; };
-      return {
-        id: r['ID'] || uid(),
-        agentId: r['AgentID'] || '',
-        logicielId: r['LogicielID'] || '',
-        role: r['Role'] || '',
-        permissions: r['Permissions'] || '',
-        statut: r['Statut'] || 'Actif',
-        groupe: r['Groupe'] || '',
-        valideur: r['Valideur'] || '',
-        dateCreation: norm(r['DateCreation']),
-        dateDerniereModif: norm(r['DateDerniereModif']),
-        dateProchRevision: norm(r['DateProchRevision']),
-        dateDerniereValidation: norm(r['DateDerniereValidation']),
-        commentaires: r['Commentaires'] || ''
-      };
-    });
-  }
-
-  // Rétrocompatibilité : ancien format Registre_Habilitations
-  if (!agents.length && wb.SheetNames.includes('Registre_Habilitations')) {
-    importLegacy(wb);
-  }
-}
-
-function importLegacy(wb) {
-  const rows = XLSX.utils.sheet_to_json(wb.Sheets['Registre_Habilitations'], { defval:'', cellDates:true });
-  const agentMap = {};
-  rows.forEach(r => {
-    const key = (r['Email']||'').toLowerCase() || (r['ID Utilisateur']||'');
-    if (!agentMap[key]) {
-      const a = { id: uid(), nom:r['Nom']||'', prenom:r['Prenom']||'', email:r['Email']||'', service:r['Service / Departement']||'', poste:r['Poste']||'' };
-      agentMap[key] = a; agents.push(a);
-      if (r['Poste'] && !params.postes.includes(r['Poste'])) params.postes.push(r['Poste']);
-    }
-    const a = agentMap[key];
-    // Crée un logiciel générique si nécessaire
-    let log = logiciels.find(l=>l.nom==='(Application générique)');
-    if (!log) { log = { id:uid(), nom:'(Application générique)', description:'Importé depuis un fichier v1', valideurs:[], groupes:[] }; logiciels.push(log); }
-    const norm = s => { if (!s) return ''; if (s instanceof Date) return s.toISOString().split('T')[0]; const d=new Date(s); return isNaN(d)?String(s):d.toISOString().split('T')[0]; };
-    habilitations.push({
-      id: uid(), agentId: a.id, logicielId: log.id,
-      role: r['Role attribue']||'', permissions: r['Permissions associees']||'', statut: r['Statut du compte']||'Actif',
-      valideur: r['Responsable valideur']||'',
-      dateCreation: norm(r['Date de creation']), dateDerniereModif: norm(r['Date de derniere modification']),
-      dateProchRevision: norm(r['Date de prochaine revision']), dateDerniereValidation: norm(r['Date derniere validation']),
-      commentaires: r['Commentaires']||''
-    });
-  });
-  if (rows.length) toast('Fichier v1 importé — vérifiez et complétez les logiciels dans Paramètres', 'info');
-}
-
-function createNewFile() {
-  const willEnc = encryptCheck.checked;
-  const pwd = document.getElementById('splashPwd').value.trim();
-  if (willEnc && (!pwd || pwd.length < 4)) { showSplashError('Choisissez un mot de passe (min. 4 caractères).'); document.getElementById('splashPwd').focus(); return; }
-  params = {
-    services: ['Direction Générale','Direction Informatique','Direction Financière','DRH','Direction Commerciale'],
-    postes: ['Chef de service','Chargé de mission','Agent de bureau','Technicien','Inspecteur','Directeur'],
-    roles: ['Administrateur Système','Administrateur Fonctionnel','Superviseur','Gestionnaire','Utilisateur Avancé','Utilisateur Standard','Auditeur'],
-    permissions: ['Lecture seule','Lecture + Écriture','Lecture + Écriture + Modification','Accès complet (Admin)','Accès restreint'],
-    revisionPeriod: 12, alertDays: 30
-  };
-  agents = []; logiciels = []; habilitations = [];
-  currentFile = { name: willEnc ? 'registre_habilitations.habil' : 'registre_habilitations.xlsx', encrypted: willEnc, password: willEnc ? pwd : '' };
-  launchApp();
-}
-
-function launchApp() {
-  document.getElementById('splash').classList.add('hidden');
-  document.getElementById('app').classList.add('show');
-  renderAll(); markSaved();
-}
-
-// ═══════════════════════
-// SAVE / EXPORT
-// ═══════════════════════
-function buildWorkbook() {
-  const wb = XLSX.utils.book_new();
-
-  // Sheet Agents
-  const agentRows = agents.map(a => ({ ID:a.id, Nom:a.nom, Prenom:a.prenom, Email:a.email, Service:a.service, Poste:a.poste }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(agentRows.length ? agentRows : [{ ID:'',Nom:'',Prenom:'',Email:'',Service:'',Poste:'' }]), 'Agents');
-
-  // Sheet Logiciels
-  const logRows = logiciels.map(l => ({ ID:l.id, Nom:l.nom, Description:l.description, Valideurs:l.valideurs.join('|'), Groupes:(l.groupes||[]).join('|') }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(logRows.length ? logRows : [{ ID:'',Nom:'',Description:'',Valideurs:'' }]), 'Logiciels');
-
-  // Sheet Habilitations
-  const hRows = habilitations.map(h => {
-    const a = agents.find(x=>x.id===h.agentId)||{};
-    const l = logiciels.find(x=>x.id===h.logicielId)||{};
-    return {
-      ID:h.id, AgentID:h.agentId, LogicielID:h.logicielId,
-      Agent_Nom:(a.nom||'')+' '+(a.prenom||''), Agent_Email:a.email||'', Logiciel_Nom:l.nom||'',
-      Role:h.role, Permissions:h.permissions, Statut:h.statut, Groupe:h.groupe||'', Valideur:h.valideur,
-      DateCreation:h.dateCreation, DateDerniereModif:h.dateDerniereModif,
-      DateProchRevision:h.dateProchRevision, DateDerniereValidation:h.dateDerniereValidation,
-      Commentaires:h.commentaires
-    };
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hRows.length ? hRows : [{ID:'',AgentID:'',LogicielID:'',Agent_Nom:'',Logiciel_Nom:'',Role:'',Permissions:'',Statut:'',Valideur:'',DateCreation:'',DateDerniereModif:'',DateProchRevision:'',DateDerniereValidation:'',Commentaires:''}]), 'Habilitations');
-
-  // Sheet Parametres — chaque liste dans sa propre colonne, indépendamment des autres
-  // Colonnes : A=Services, C=Postes, E=Roles, G=Permissions (colonnes B/D/F/H vides pour lisibilité)
-  const pRows = [['SERVICES','','POSTES','','ROLES','','PERMISSIONS']];
-  const maxLen = Math.max(params.services.length, params.postes.length, params.roles.length, params.permissions.length, 1);
-  for (let i=0; i<maxLen; i++) {
-    pRows.push([
-      params.services[i]    != null ? params.services[i]    : '',
-      '',
-      params.postes[i]      != null ? params.postes[i]      : '',
-      '',
-      params.roles[i]       != null ? params.roles[i]       : '',
-      '',
-      params.permissions[i] != null ? params.permissions[i] : ''
-    ]);
-  }
-  // Ligne vide de séparation puis paramètres numériques
-  pRows.push(['', '', '', '', '', '', '']);
-  pRows.push(['Periodicite de revision (mois):', params.revisionPeriod, '', '', '', '', '']);
-  pRows.push(['Alerte avant expiration (jours):', params.alertDays, '', '', '', '', '']);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pRows), 'Parametres');
-
-  // Dashboard
-  const actif = habilitations.filter(h=>h.statut==='Actif').length;
-  const soon = habilitations.filter(h=>daysUntil(h.dateProchRevision)<=params.alertDays).length;
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ['TABLEAU DE BORD'],['Date:',today()],[''],
-    ['Total agents:',agents.length],['Total logiciels:',logiciels.length],
-    ['Total habilitations:',habilitations.length],['Habilitations actives:',actif],
-    ['Révisions à planifier:',soon],
-  ]), 'Tableau_de_Bord');
-
-  return wb;
-}
-
-async function saveFile() {
-  if (!currentFile) { toast('Aucun fichier en cours','error'); return; }
-  if (currentFile.encrypted && !currentFile.password) { toast('Mot de passe manquant','error'); switchTab('settings'); return; }
-  try {
-    const wb = buildWorkbook();
-    const xlsxBytes = XLSX.write(wb, { bookType:'xlsx', type:'array' });
-    const base = (currentFile.name||'registre').replace(/\.(xlsx|habil)$/i,'');
-    let blob, filename;
-    if (currentFile.encrypted) {
-      const enc = await encryptBytes(new Uint8Array(xlsxBytes), currentFile.password);
-      blob = new Blob([enc], { type:'application/octet-stream' }); filename = base+'.habil';
-    } else {
-      blob = new Blob([xlsxBytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); filename = base+'.xlsx';
-    }
-    dlBlob(blob, filename);
-    currentFile.name = filename; pendingSecurityChange = false;
-    markSaved(); renderSecurityPanel();
-    toast(currentFile.encrypted ? `🔒 Fichier chiffré : ${filename}` : `Fichier : ${filename}`, 'success');
-  } catch(e) { console.error(e); toast('Erreur : '+(e.message||e),'error'); }
-}
-
-function exportFile() {
-  const doExp = () => {
-    try { const wb = buildWorkbook(); const fn='export_audit_'+today()+'.xlsx'; XLSX.writeFile(wb,fn); toast(`Export téléchargé : ${fn}`,'success'); }
-    catch(e) { toast('Erreur export : '+(e.message||e),'error'); }
-  };
-  if (currentFile && currentFile.encrypted) {
-    openConfirmDialog({ title:'Export en clair (audit)', message:'Génère un .xlsx non chiffré à usage d\'audit. Continuer ?', confirmLabel:'Exporter', confirmClass:'btn-primary', onConfirm:doExp });
-  } else doExp();
-}
-
-function dlBlob(blob, name) {
-  const url = URL.createObjectURL(blob); const a = document.createElement('a');
-  a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-}
-
-function markSaved() { unsaved=false; const i=document.getElementById('saveIndicator'); i.textContent='Sauvegardé ✓'; i.classList.add('saved'); }
-function markUnsaved() { unsaved=true; const i=document.getElementById('saveIndicator'); i.textContent='● Non sauvegardé'; i.classList.remove('saved'); }
-
-// ═══════════════════════
-// NAV
-// ═══════════════════════
-function switchTab(tab) {
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
-  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id==='page-'+tab));
-  if (tab==='agents') renderAgentsTable();
-  if (tab==='habilitations') renderHabilTable();
-  if (tab==='revisions') renderRevisions();
-  if (tab==='settings') renderSettings();
-  if (tab==='dashboard') renderDashboard();
-}
-
-// ═══════════════════════
-// RENDER ALL
-// ═══════════════════════
-function renderAll() {
-  renderStats();
-  renderDashboard();
-  renderAgentsTable();
-  renderHabilTable();
-  renderRevisions();
-  renderSettings();
-  updateRevBadge();
-  populateHabilFilters();
-}
-
-function renderStats() {
-  const totalHabils = habilitations.length;
-  const actifs = habilitations.filter(h=>h.statut==='Actif').length;
-  const soon = habilitations.filter(h=>daysUntil(h.dateProchRevision)<=params.alertDays).length;
-  const urgent = habilitations.filter(h=>daysUntil(h.dateProchRevision)<=7).length;
-  document.getElementById('statsGrid').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Agents</div><div class="stat-value">${agents.length}</div><div class="stat-sub">enregistrés</div></div>
-    <div class="stat-card"><div class="stat-label">Logiciels</div><div class="stat-value blue">${logiciels.length}</div><div class="stat-sub">référencés</div></div>
-    <div class="stat-card"><div class="stat-label">Habilitations</div><div class="stat-value">${totalHabils}</div><div class="stat-sub">${actifs} actives</div></div>
-    <div class="stat-card"><div class="stat-label">Révisions à venir</div><div class="stat-value ${soon>0?'orange':''}">${soon}</div><div class="stat-sub">dans les ${params.alertDays}j</div></div>
-    <div class="stat-card"><div class="stat-label">Révisions urgentes</div><div class="stat-value ${urgent>0?'red':''}">${urgent}</div><div class="stat-sub">dans les 7j</div></div>
-  `;
-  document.getElementById('dbSubtitle').textContent = `Mis à jour le ${new Date().toLocaleDateString('fr-FR')} · ${totalHabils} habilitation(s)`;
-}
-
-function renderDashboard() {
-  // Derniers agents — triés par dateCreation de leur habilitation la plus récente
-  const lastAgents = [...agents].sort((a, b) => {
-    const latestHabil = id => {
-      const hs = habilitations.filter(h=>h.agentId===id);
-      if (!hs.length) return '';
-      return hs.reduce((max, h) => (h.dateCreation||'') > max ? (h.dateCreation||'') : max, '');
-    };
-    return latestHabil(b.id).localeCompare(latestHabil(a.id));
-  }).slice(0, 5);
-  const rAB = document.getElementById('recentAgentsBody');
-  if (!lastAgents.length) { rAB.innerHTML=`<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--text3)">Aucun agent</td></tr>`; }
-  else rAB.innerHTML = lastAgents.map(a => {
-    const logs = agentHabils(a.id).map(h=>logicielName(h.logicielId)).filter(Boolean);
-    return `<tr><td><strong>${a.nom} ${a.prenom}</strong><br><span style="font-size:11px;color:var(--text3)">${a.email}</span></td>
-      <td class="muted">${a.service||'—'}</td>
-      <td>${logs.length ? logs.map(l=>`<span class="badge-logiciel">${l}</span>`).join('') : '<span style="color:var(--text3);font-size:12px">Aucun</span>'}</td></tr>`;
-  }).join('');
-
-  // Révisions urgentes
-  const urgent = habilitations.filter(h=>daysUntil(h.dateProchRevision)<=params.alertDays).sort((a,b)=>daysUntil(a.dateProchRevision)-daysUntil(b.dateProchRevision)).slice(0,5);
-  const uRB = document.getElementById('urgentRevBody');
-  if (!urgent.length) { uRB.innerHTML=`<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--green);font-size:13px">✅ Tout est à jour</td></tr>`; }
-  else uRB.innerHTML = urgent.map(h => {
-    const d = daysUntil(h.dateProchRevision);
-    const ds = d<=0 ? `<span style="color:var(--red);font-weight:700">Expiré</span>` : d<=7 ? `<span style="color:var(--red)">J-${d}</span>` : `<span style="color:var(--orange)">J-${d}</span>`;
-    return `<tr><td><strong>${agentName(h.agentId)}</strong></td><td class="muted">${logicielName(h.logicielId)}</td><td>${ds}</td></tr>`;
-  }).join('');
-}
-
-function updateRevBadge() {
-  const n = habilitations.filter(h=>daysUntil(h.dateProchRevision)<=params.alertDays).length;
-  const b = document.getElementById('revBadge');
-  b.style.display = n>0?'inline-flex':'none'; b.textContent = n;
-}
-
-// ═══════════════════════
-// AGENTS TABLE
-// ═══════════════════════
-function agentSort(col) {
-  if (agentSortCol===col) agentSortAsc=!agentSortAsc; else { agentSortCol=col; agentSortAsc=true; }
-  renderAgentsTable();
-}
-
-function renderAgentsTable() {
-  const search = (document.getElementById('agentSearch').value||'').toLowerCase();
-  const svc = document.getElementById('agentFilterService').value;
-  let list = agents.filter(a => {
-    const txt = [a.nom,a.prenom,a.email,a.service,a.poste].join(' ').toLowerCase();
-    return (!search || txt.includes(search)) && (!svc || a.service===svc);
-  });
-  if (agentSortCol) {
-    const getV = a => ({ nom:a.nom+' '+a.prenom, service:a.service, poste:a.poste, email:a.email }[agentSortCol]||'').toLowerCase();
-    list.sort((a,b) => agentSortAsc ? getV(a).localeCompare(getV(b),'fr') : getV(b).localeCompare(getV(a),'fr'));
-  }
-  document.getElementById('agentCount').textContent = `${list.length} agent(s)`;
-  const body = document.getElementById('agentsBody');
-  if (!list.length) { body.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👤</div><p>Aucun agent</p></div></td></tr>`; return; }
-  body.innerHTML = list.map(a => {
-    const habils = agentHabils(a.id);
-    const logs = habils.map(h=>logicielName(h.logicielId)).filter((v,i,arr)=>v&&arr.indexOf(v)===i);
-    return `<tr>
-      <td><strong>${a.nom} ${a.prenom}</strong><br><span style="font-size:11px;color:var(--text3)">${a.id}</span></td>
-      <td class="muted">${a.service||'—'}</td>
-      <td class="muted">${a.poste||'—'}</td>
-      <td>${logs.length ? logs.map(l=>`<span class="badge-logiciel">${l}</span>`).join('') : '<span style="color:var(--text3);font-size:12px">Aucun accès</span>'}</td>
-      <td class="muted">${a.email||'—'}</td>
-      <td><div class="row-actions">
-        <button class="action-btn" onclick="openAgentModal('${a.id}')" title="Modifier">✏</button>
-        <button class="action-btn del" onclick="confirmDeleteAgent('${a.id}')" title="Supprimer">🗑</button>
-      </div></td>
-    </tr>`;
-  }).join('');
-}
-
-// ═══════════════════════
-// HABILITATIONS TABLE
-// ═══════════════════════
-function populateHabilFilters() {
-  ['habilFilterLogiciel','revFilterLogiciel'].forEach(id => {
-    const sel = document.getElementById(id); if (!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">Tous les logiciels</option>' + logiciels.map(l=>`<option value="${esc(l.id)}">${esc(l.nom)}</option>`).join('');
-    sel.value = cur;
-  });
-}
-
-function habilSort(col) {
-  if (habilSortCol===col) habilSortAsc=!habilSortAsc; else { habilSortCol=col; habilSortAsc=true; }
-  renderHabilTable();
-}
-
-function renderHabilTable() {
-  const search = (document.getElementById('habilSearch').value||'').toLowerCase();
-  const fLog = document.getElementById('habilFilterLogiciel').value;
-  const fStat = document.getElementById('habilFilterStatut').value;
-  let list = habilitations.filter(h => {
-    const a = agents.find(x=>x.id===h.agentId)||{};
-    const l = logiciels.find(x=>x.id===h.logicielId)||{};
-    const txt = [a.nom,a.prenom,a.email,l.nom,h.role,h.permissions,h.groupe||'',h.valideur,h.statut].join(' ').toLowerCase();
-    return (!search||txt.includes(search)) && (!fLog||h.logicielId===fLog) && (!fStat||h.statut===fStat);
-  });
-  if (habilSortCol) {
-    const getV = h => {
-      const a=agents.find(x=>x.id===h.agentId)||{};
-      const l=logiciels.find(x=>x.id===h.logicielId)||{};
-      return ({agent:(a.nom+' '+a.prenom).toLowerCase(),logiciel:(l.nom||'').toLowerCase(),role:(h.role||'').toLowerCase(),permissions:(h.permissions||'').toLowerCase(),groupe:(h.groupe||'').toLowerCase(),statut:(h.statut||'').toLowerCase(),valideur:(h.valideur||'').toLowerCase(),revision:h.dateProchRevision||'9'})[habilSortCol]||'';
-    };
-    list.sort((a,b) => habilSortAsc ? getV(a).localeCompare(getV(b),'fr') : getV(b).localeCompare(getV(a),'fr'));
-  }
-  document.getElementById('habilCount').textContent = `${list.length} habilitation(s)`;
-  const body = document.getElementById('habilBody');
-  if (!list.length) { body.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🔐</div><p>Aucune habilitation</p></div></td></tr>`; return; }
-  body.innerHTML = list.map(h => {
-    const a = agents.find(x=>x.id===h.agentId)||{};
-    const l = logiciels.find(x=>x.id===h.logicielId)||{};
-    const d = daysUntil(h.dateProchRevision);
-    const isAlert = d<=params.alertDays;
-    const dStr = d===9999?'—':d<=0?`<span style="color:var(--red);font-weight:600">Expiré</span>`:d<=7?`<span style="color:var(--red)">J-${d}</span>`:d<=params.alertDays?`<span style="color:var(--orange)">J-${d}</span>`:`<span class="muted">J-${d}</span>`;
-    return `<tr class="${isAlert?'alert-row':''}">
-      <td><strong>${a.nom||'?'} ${a.prenom||''}</strong><br><span style="font-size:11px;color:var(--text3)">${a.service||''}</span></td>
-      <td><span class="badge-logiciel">${l.nom||'?'}</span></td>
-      <td class="muted">${h.role||'—'}</td>
-      <td class="muted" style="font-size:12px">${h.permissions||'—'}</td>
-      <td class="muted" style="font-size:12px">${h.groupe||'—'}</td>
-      <td>${statusBadge(h.statut)}</td>
-      <td class="muted">${h.valideur||'—'}</td>
-      <td>${dStr}</td>
-      <td><div class="row-actions">
-        <button class="action-btn" onclick="openHabilModal('${h.id}')" title="Modifier">✏</button>
-        <button class="action-btn del" onclick="confirmDeleteHabil('${h.id}')" title="Supprimer">🗑</button>
-      </div></td>
-    </tr>`;
-  }).join('');
-}
-
-// ═══════════════════════
-// REVISIONS
-// ═══════════════════════
-function renderRevisions() {
-  populateHabilFilters();
-  const fLog = document.getElementById('revFilterLogiciel').value;
-  const toRev = habilitations
-    .map(h=>({...h, _days:daysUntil(h.dateProchRevision)}))
-    .filter(h=>h._days<=params.alertDays && (!fLog||h.logicielId===fLog))
-    .sort((a,b)=>a._days-b._days);
-  const urgent = toRev.filter(h=>h._days<=7).length;
-  const soon   = toRev.filter(h=>h._days<=30&&h._days>7).length;
-  document.getElementById('revisionAlerts').innerHTML =
-    (urgent>0?`<div class="revision-alert"><span class="alert-icon">🚨</span><div class="alert-text"><strong>${urgent} révision(s) urgente(s)</strong> dans les 7 prochains jours</div></div>`:'') +
-    (soon>0?`<div class="revision-alert"><span class="alert-icon">⚠️</span><div class="alert-text"><strong>${soon} révision(s) à planifier</strong> dans les 30 prochains jours</div></div>`:'');
-  document.getElementById('revCount').textContent = `${toRev.length} habilitation(s)`;
-  const body = document.getElementById('revisionBody');
-  if (!toRev.length) { body.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">✅</div><p>Aucune révision à planifier</p></div></td></tr>`; return; }
-  body.innerHTML = toRev.map(h => {
-    const a=agents.find(x=>x.id===h.agentId)||{};
-    const l=logiciels.find(x=>x.id===h.logicielId)||{};
-    const ds = h._days<=0?`<span style="color:var(--red);font-weight:700">Expiré (${Math.abs(h._days)}j)</span>`:h._days<=7?`<span style="color:var(--red);font-weight:600">J-${h._days}</span>`:`<span style="color:var(--orange)">J-${h._days}</span>`;
-    return `<tr>
-      <td><strong>${a.nom||'?'} ${a.prenom||''}</strong></td>
-      <td class="muted">${a.service||'—'}</td>
-      <td><span class="badge-logiciel">${l.nom||'?'}</span></td>
-      <td class="muted">${h.role||'—'}</td>
-      <td class="muted">${fmtDate(h.dateProchRevision)}</td>
-      <td>${ds}</td>
-      <td class="muted">${h.valideur||'—'}</td>
-      <td><div class="row-actions" style="opacity:1">
-        <button class="btn btn-success btn-sm" onclick="validateRevision('${h.id}')">✔ Valider</button>
-        <button class="btn btn-ghost btn-sm" onclick="openHabilModal('${h.id}')">✏</button>
-      </div></td>
-    </tr>`;
-  }).join('');
-}
-
-function validateRevision(hId) {
-  const h = habilitations.find(x=>x.id===hId); if (!h) return;
-  h.dateDerniereValidation = today(); h.dateDerniereModif = today();
-  h.dateProchRevision = addMonths(params.revisionPeriod);
-  markUnsaved(); renderRevisions(); renderStats(); updateRevBadge();
-  toast('Révision validée — prochaine révision dans '+params.revisionPeriod+' mois','success');
-}
-
-// ═══════════════════════
-// SETTINGS
-// ═══════════════════════
-function renderSettings() {
-  renderListEditor('servicesEditor','services');
-  renderListEditor('postesEditor','postes');
-  renderListEditor('rolesEditor','roles');
-  renderListEditor('permissionsEditor','permissions');
-  renderLogicielsEditor();
-  populateHabilFilters();
-  document.getElementById('revisionPeriod').value = params.revisionPeriod;
-  document.getElementById('alertDays').value = params.alertDays;
-  renderSecurityPanel();
-  // Filtre services dans agents
-  const sel = document.getElementById('agentFilterService');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Tous les services</option>' + params.services.map(s=>`<option>${s}</option>`).join('');
-  sel.value = cur;
-}
-
-function renderListEditor(containerId, key) {
-  const c = document.getElementById(containerId);
-  c.innerHTML = params[key].map((item,i) => `
-    <div class="list-item"><span>${item}</span><button onclick="removeParam('${key}',${i})">✕</button></div>
-  `).join('') || '<div style="color:var(--text3);font-size:12px;padding:4px 0">Aucun élément</div>';
-}
-
-function addParam(key, inputId) {
-  const inp = document.getElementById(inputId); const val = inp.value.trim();
-  if (!val || params[key].includes(val)) { inp.focus(); return; }
-  params[key].push(val); inp.value = ''; renderSettings(); markUnsaved();
-}
-function removeParam(key, idx) { params[key].splice(idx,1); renderSettings(); markUnsaved(); }
-
-// ─── Logiciels editor ───
-function renderLogicielsEditor() {
-  const c = document.getElementById('logicielsEditor');
-  if (!logiciels.length) { c.innerHTML='<div style="color:var(--text3);font-size:13px;padding:8px 0">Aucun logiciel référencé. Ajoutez-en un ci-dessous.</div>'; return; }
-  c.innerHTML = logiciels.map((l,i) => `
-    <div class="logiciel-editor-card">
-      <div class="logiciel-editor-top">
-        <input type="text" value="${esc(l.nom)}" placeholder="Nom du logiciel" onchange="logiciels[${i}].nom=this.value; markUnsaved();" style="font-weight:600;">
-        <input type="text" value="${esc(l.description)}" placeholder="Description (optionnel)" onchange="logiciels[${i}].description=this.value; markUnsaved();" style="flex:2;">
-        <button class="btn btn-danger btn-sm" onclick="confirmDeleteLogiciel(${i})">✕</button>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;letter-spacing:0.5px;">RESPONSABLES VALIDEURS PAR DÉFAUT</div>
-      <div class="logiciel-editor-valideurs" id="valideurs-${i}">
-        ${l.valideurs.map((v,vi) => `<span class="valideur-chip">${esc(v)}<button onclick="removeValideur(${i},${vi})">✕</button></span>`).join('')}
-      </div>
-      <div class="add-valideur-row">
-        <input type="text" class="form-control" id="newValideur-${i}" placeholder="Ajouter un valideur…" style="font-size:12px;padding:5px 10px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addValideur(${i});}">
-        <button class="btn btn-ghost btn-sm" onclick="addValideur(${i})">＋</button>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin:10px 0 4px;font-weight:600;letter-spacing:0.5px;">GROUPES DE SÉCURITÉ</div>
-      <div class="logiciel-editor-valideurs" id="groupes-${i}">
-        ${(l.groupes||[]).map((g,gi) => `<span class="valideur-chip">${esc(g)}<button onclick="removeGroupe(${i},${gi})">✕</button></span>`).join('')}
-      </div>
-      <div class="add-valideur-row">
-        <input type="text" class="form-control" id="newGroupe-${i}" placeholder="Ajouter un groupe…" style="font-size:12px;padding:5px 10px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addGroupe(${i});}">
-        <button class="btn btn-ghost btn-sm" onclick="addGroupe(${i})">＋</button>
+<!-- PASSWORD MODAL -->
+<div class="modal-overlay" id="passwordModalOverlay">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="passwordModalTitle">Mot de passe</div>
+        <div class="modal-subtitle" id="passwordModalMessage"></div>
       </div>
     </div>
-  `).join('');
-}
-
-function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-
-function addLogiciel() {
-  logiciels.push({ id:uid(), nom:'Nouveau logiciel', description:'', valideurs:[], groupes:[] });
-  markUnsaved(); renderLogicielsEditor(); populateHabilFilters();
-}
-function confirmDeleteLogiciel(idx) {
-  const l = logiciels[idx];
-  const usages = habilitations.filter(h=>h.logicielId===l.id).length;
-  openConfirmDialog({
-    title:'Supprimer le logiciel ?',
-    message:`"${l.nom}" sera supprimé${usages>0?' ainsi que ses '+usages+' habilitation(s) associée(s)':''}.`,
-    confirmLabel:'Supprimer', confirmClass:'btn-danger',
-    onConfirm: () => {
-      habilitations = habilitations.filter(h=>h.logicielId!==l.id);
-      logiciels.splice(idx,1); markUnsaved(); renderLogicielsEditor(); populateHabilFilters(); renderAll();
-    }
-  });
-}
-function addValideur(logIdx) {
-  const inp = document.getElementById(`newValideur-${logIdx}`); if (!inp) return;
-  const v = inp.value.trim(); if (!v) return;
-  if (!logiciels[logIdx].valideurs.includes(v)) logiciels[logIdx].valideurs.push(v);
-  inp.value=''; markUnsaved(); renderLogicielsEditor();
-}
-function removeValideur(logIdx, valIdx) { logiciels[logIdx].valideurs.splice(valIdx,1); markUnsaved(); renderLogicielsEditor(); }
-function addGroupe(logIdx) {
-  const inp = document.getElementById(`newGroupe-${logIdx}`); if (!inp) return;
-  const v = inp.value.trim(); if (!v) return;
-  if (!logiciels[logIdx].groupes) logiciels[logIdx].groupes = [];
-  if (!logiciels[logIdx].groupes.includes(v)) logiciels[logIdx].groupes.push(v);
-  inp.value=''; markUnsaved(); renderLogicielsEditor();
-}
-function removeGroupe(logIdx, grpIdx) {
-  if (!logiciels[logIdx].groupes) return;
-  logiciels[logIdx].groupes.splice(grpIdx,1); markUnsaved(); renderLogicielsEditor();
-}
-
-// ═══════════════════════
-// MODAL AGENT
-// ═══════════════════════
-function openAgentModal(agentId=null) {
-  editingAgentId = agentId;
-  agentHabilLines = [];
-  document.getElementById('agentModalTitle').textContent = agentId ? 'Modifier l\'agent' : 'Nouvel agent';
-
-  // Populate selects
-  const svc = document.getElementById('aService'); svc.innerHTML = params.services.map(s=>`<option>${s}</option>`).join('');
-  const pos = document.getElementById('aPoste'); pos.innerHTML = `<option value="">(non renseigné)</option>` + params.postes.map(p=>`<option>${p}</option>`).join('');
-
-  if (agentId) {
-    const a = agents.find(x=>x.id===agentId); if (!a) return;
-    document.getElementById('aNom').value = a.nom;
-    document.getElementById('aPrenom').value = a.prenom;
-    document.getElementById('aEmail').value = a.email;
-    document.getElementById('aId').value = a.id;
-    setSelectVal('aService', a.service);
-    setSelectVal('aPoste', a.poste);
-    // Charger les habilitations existantes
-    agentHabils(agentId).forEach(h => {
-      agentHabilLines.push({ ...h, _tmpId: uid() });
-    });
-  } else {
-    document.getElementById('aNom').value='';
-    document.getElementById('aPrenom').value='';
-    document.getElementById('aEmail').value='';
-    document.getElementById('aId').value='';
-    agentHabilLines = [];
-  }
-  renderHabilLines();
-  document.getElementById('agentModalOverlay').classList.add('show');
-}
-
-function closeAgentModal() {
-  document.getElementById('agentModalOverlay').classList.remove('show');
-  editingAgentId = null; agentHabilLines = [];
-}
-
-function renderHabilLines() {
-  const container = document.getElementById('habilLines');
-  if (!agentHabilLines.length) { container.innerHTML='<div style="color:var(--text3);font-size:13px;padding:8px 0">Aucune habilitation — cliquez sur "Ajouter" pour en créer une.</div>'; return; }
-  container.innerHTML = agentHabilLines.map((h,i) => {
-    const log = logiciels.find(x=>x.id===h.logicielId)||{};
-    const valSuggest = log.valideurs && log.valideurs.length ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">Valideurs suggérés : ${log.valideurs.join(', ')}</div>` : '';
-    return `<div class="habil-line" id="hline-${i}">
-      <div class="habil-line-header">
-        <div class="habil-line-num">${i+1}</div>
-        <div class="habil-line-title">${log.nom||'Logiciel non défini'}</div>
-        <button class="habil-line-del" onclick="removeHabilLine(${i})">✕</button>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">MOT DE PASSE <span class="required">*</span></label>
+        <input type="password" class="form-control" id="passwordInput1" placeholder="Minimum 8 caractères" autocomplete="new-password">
       </div>
-      <div class="form-grid-3">
-        <div class="form-group">
-          <label class="form-label">LOGICIEL <span class="required">*</span></label>
-          <select class="form-control" onchange="onLineLogicielChange(${i},this.value)">
-            ${logiciels.map(l=>`<option value="${l.id}" ${l.id===h.logicielId?'selected':''}>${esc(l.nom)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">RÔLE <span class="required">*</span></label>
-          <select class="form-control" onchange="agentHabilLines[${i}].role=this.value">
-            ${params.roles.map(r=>`<option ${r===h.role?'selected':''}>${r}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">PERMISSIONS <span class="required">*</span></label>
-          <select class="form-control" onchange="agentHabilLines[${i}].permissions=this.value">
-            ${params.permissions.map(p=>`<option ${p===h.permissions?'selected':''}>${p}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">STATUT</label>
-          <select class="form-control" onchange="agentHabilLines[${i}].statut=this.value">
-            ${['Actif','Inactif','Suspendu','En attente'].map(s=>`<option ${s===h.statut?'selected':''}>${s}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">GROUPE DE SÉCURITÉ</label>
-          <input class="form-control" value="${esc(h.groupe||'')}" placeholder="Ex : GRP_APP_LECTURE…"
-            list="grpList-${i}" autocomplete="off"
-            oninput="agentHabilLines[${i}].groupe=this.value">
-          <datalist id="grpList-${i}">${(log.groupes||[]).map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px;">${(log.groupes||[]).length ? 'Groupes : '+log.groupes.join(', ') : ''}</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">RESPONSABLE VALIDEUR</label>
-          <input class="form-control" value="${esc(h.valideur||'')}" placeholder="Responsable…" oninput="agentHabilLines[${i}].valideur=this.value">
-          ${valSuggest}
-        </div>
-        <div class="form-group">
-          <label class="form-label">PROCH. RÉVISION</label>
-          <input class="form-control" type="date" value="${h.dateProchRevision||''}" onchange="agentHabilLines[${i}].dateProchRevision=this.value">
-        </div>
+      <div class="form-group" id="passwordConfirmGroup">
+        <label class="form-label">CONFIRMER LE MOT DE PASSE <span class="required">*</span></label>
+        <input type="password" class="form-control" id="passwordInput2" placeholder="Ressaisir le mot de passe" autocomplete="new-password">
       </div>
-    </div>`;
-  }).join('');
-}
-
-function addHabilLine() {
-  if (!logiciels.length) {
-    toast("Ajoutez d'abord au moins un logiciel dans Paramètres avant de créer une habilitation.", 'error');
-    return;
-  }
-  const firstLog = logiciels[0];
-  agentHabilLines.push({
-    _tmpId: uid(), id: null,
-    logicielId: firstLog.id,
-    role: params.roles[0]||'', permissions: params.permissions[0]||'',
-    statut: 'Actif', groupe: '', valideur: firstLog.valideurs[0]||'',
-    dateCreation: today(), dateDerniereModif: today(),
-    dateProchRevision: addMonths(params.revisionPeriod), dateDerniereValidation: today(),
-    commentaires: ''
-  });
-  renderHabilLines();
-}
-
-function removeHabilLine(i) { agentHabilLines.splice(i,1); renderHabilLines(); }
-
-function onLineLogicielChange(i, logId) {
-  agentHabilLines[i].logicielId = logId;
-  const log = logiciels.find(x=>x.id===logId);
-  // Pré-remplir le valideur avec le premier valideur du nouveau logiciel,
-  // sauf si l'utilisateur a saisi une valeur qui n'appartient à aucun logiciel connu
-  // (dans ce cas on respecte sa saisie manuelle).
-  if (log) {
-    const currentVal = agentHabilLines[i].valideur || '';
-    const isFromAnyLogiciel = logiciels.some(l => l.valideurs.includes(currentVal));
-    // Si vide, ou si la valeur vient d'un autre logiciel → remplacer par le valideur du nouveau
-    if (!currentVal || isFromAnyLogiciel) {
-      agentHabilLines[i].valideur = log.valideurs.length ? log.valideurs[0] : '';
-    }
-  }
-  renderHabilLines();
-}
-
-function saveAgent() {
-  const nom = document.getElementById('aNom').value.trim();
-  const prenom = document.getElementById('aPrenom').value.trim();
-  const email = document.getElementById('aEmail').value.trim();
-  const svc = document.getElementById('aService').value;
-  if (!nom||!prenom||!email||!svc) { toast('Champs obligatoires manquants (*)','error'); return; }
-  // Vérifier doublon email (sauf pour l'agent en cours de modification)
-  const emailDuplicate = agents.find(a => a.email.toLowerCase() === email.toLowerCase() && a.id !== editingAgentId);
-  if (emailDuplicate) { toast(`L'email ${email} est déjà utilisé par ${emailDuplicate.nom} ${emailDuplicate.prenom}.`, 'error'); return; }
-
-  // Vérifie les lignes habil
-  for (let h of agentHabilLines) {
-    if (!h.logicielId||!h.role||!h.permissions) { toast('Complétez toutes les habilitations (logiciel, rôle, permissions)','error'); return; }
-  }
-
-  const agentId = editingAgentId || uid();
-  const a = { id:agentId, nom, prenom, email, service:svc, poste:document.getElementById('aPoste').value||'' };
-
-  if (editingAgentId) {
-    const idx = agents.findIndex(x=>x.id===editingAgentId);
-    if (idx>=0) agents[idx]=a;
-    // Supprimer les habils existantes, réinjecter
-    habilitations = habilitations.filter(h=>h.agentId!==editingAgentId);
-  } else {
-    agents.push(a);
-  }
-
-  agentHabilLines.forEach(h => {
-    // Mémoriser le groupe dans le logiciel s'il est nouveau
-    if (h.groupe) {
-      const logObj = logiciels.find(x=>x.id===h.logicielId);
-      if (logObj && !logObj.groupes.includes(h.groupe)) { logObj.groupes.push(h.groupe); markUnsaved(); }
-    }
-    habilitations.push({
-      id: h.id||uid(), agentId, logicielId: h.logicielId,
-      role: h.role, permissions: h.permissions, statut: h.statut, groupe: h.groupe||'', valideur: h.valideur,
-      dateCreation: h.dateCreation||today(), dateDerniereModif: today(),
-      dateProchRevision: h.dateProchRevision||addMonths(params.revisionPeriod),
-      dateDerniereValidation: h.dateDerniereValidation||today(),
-      commentaires: h.commentaires||''
-    });
-  });
-
-  closeAgentModal(); markUnsaved(); renderAll();
-  toast(editingAgentId ? 'Agent mis à jour' : 'Agent créé avec '+agentHabilLines.length+' habilitation(s)','success');
-}
-
-// ═══════════════════════
-// MODAL HABILITATION
-// ═══════════════════════
-function openHabilModal(habilId=null) {
-  if (!habilId) {
-    if (!agents.length) { toast("Ajoutez d'abord un agent avant de créer une habilitation.", 'error'); return; }
-    if (!logiciels.length) { toast("Ajoutez d'abord un logiciel dans Paramètres avant de créer une habilitation.", 'error'); return; }
-  }
-  editingHabilId = habilId;
-  document.getElementById('habilModalTitle').textContent = habilId ? 'Modifier l\'habilitation' : 'Nouvelle habilitation';
-
-  // Populate selects
-  const ag = document.getElementById('hAgent');
-  ag.innerHTML = agents.map(a=>`<option value="${a.id}">${esc(a.nom+' '+a.prenom)} (${esc(a.service||'')})</option>`).join('');
-  const lo = document.getElementById('hLogiciel');
-  lo.innerHTML = logiciels.map(l=>`<option value="${l.id}">${esc(l.nom)}</option>`).join('');
-  const ro = document.getElementById('hRole');
-  ro.innerHTML = params.roles.map(r=>`<option>${esc(r)}</option>`).join('');
-  const pe = document.getElementById('hPermissions');
-  pe.innerHTML = params.permissions.map(p=>`<option>${esc(p)}</option>`).join('');
-
-  if (habilId) {
-    const h = habilitations.find(x=>x.id===habilId); if (!h) return;
-    setSelectVal('hAgent',h.agentId); setSelectVal('hLogiciel',h.logicielId);
-    setSelectVal('hRole',h.role); setSelectVal('hPermissions',h.permissions);
-    document.getElementById('hStatut').value = h.statut||'Actif';
-    document.getElementById('hGroupe').value = h.groupe||'';
-    document.getElementById('hValideur').value = h.valideur||'';
-    document.getElementById('hRevision').value = h.dateProchRevision||'';
-    document.getElementById('hDerniereValidation').value = h.dateDerniereValidation||'';
-    document.getElementById('hCommentaires').value = h.commentaires||'';
-  } else {
-    if (logiciels[0]) { lo.value = logiciels[0].id; onHabilLogicielChange(); }
-    document.getElementById('hStatut').value = 'Actif';
-    document.getElementById('hGroupe').value = '';
-    document.getElementById('hValideur').value = '';
-    document.getElementById('hRevision').value = addMonths(params.revisionPeriod);
-    document.getElementById('hDerniereValidation').value = today();
-    document.getElementById('hCommentaires').value = '';
-  }
-  onHabilLogicielChange();
-  document.getElementById('habilModalOverlay').classList.add('show');
-}
-
-function onHabilLogicielChange() {
-  const logId = document.getElementById('hLogiciel').value;
-  const log = logiciels.find(x=>x.id===logId);
-
-  // Valideurs
-  const sug = document.getElementById('hValideurSuggest');
-  if (log && log.valideurs && log.valideurs.length) {
-    sug.innerHTML = `Valideurs : <strong>${log.valideurs.join(', ')}</strong>`;
-    if (!document.getElementById('hValideur').value) document.getElementById('hValideur').value = log.valideurs[0];
-  } else { sug.innerHTML = ''; }
-
-  // Groupes de sécurité — alimenter la datalist
-  const dl = document.getElementById('hGroupeList');
-  const gs = document.getElementById('hGroupeSuggest');
-  if (log && log.groupes && log.groupes.length) {
-    dl.innerHTML = log.groupes.map(g=>`<option value="${esc(g)}">`).join('');
-    gs.innerHTML = `Groupes disponibles : <strong>${log.groupes.join(', ')}</strong>`;
-  } else {
-    dl.innerHTML = '';
-    gs.innerHTML = '';
-  }
-}
-
-function closeHabilModal() { document.getElementById('habilModalOverlay').classList.remove('show'); editingHabilId=null; }
-
-function saveHabil() {
-  const agentId = document.getElementById('hAgent').value;
-  const logicielId = document.getElementById('hLogiciel').value;
-  const role = document.getElementById('hRole').value;
-  const permissions = document.getElementById('hPermissions').value;
-  if (!agentId||!logicielId||!role||!permissions) { toast('Champs obligatoires manquants','error'); return; }
-  // Mémoriser le groupe dans le logiciel s'il est nouveau
-  const groupeSaisi = document.getElementById('hGroupe').value.trim();
-  if (groupeSaisi) {
-    const logObj = logiciels.find(x=>x.id===logicielId);
-    if (logObj && !logObj.groupes.includes(groupeSaisi)) { logObj.groupes.push(groupeSaisi); markUnsaved(); }
-  }
-  const h = {
-    id: editingHabilId || uid(), agentId, logicielId, role, permissions,
-    statut: document.getElementById('hStatut').value,
-    groupe: groupeSaisi,
-    valideur: document.getElementById('hValideur').value.trim(),
-    dateCreation: editingHabilId ? (habilitations.find(x=>x.id===editingHabilId)||{}).dateCreation||today() : today(),
-    dateDerniereModif: today(),
-    dateProchRevision: document.getElementById('hRevision').value,
-    dateDerniereValidation: document.getElementById('hDerniereValidation').value,
-    commentaires: document.getElementById('hCommentaires').value.trim()
-  };
-  if (editingHabilId) { const idx=habilitations.findIndex(x=>x.id===editingHabilId); if(idx>=0) habilitations[idx]=h; }
-  else habilitations.push(h);
-  closeHabilModal(); markUnsaved(); renderAll();
-  toast(editingHabilId ? 'Habilitation mise à jour' : 'Habilitation ajoutée','success');
-}
-
-// ═══════════════════════
-// DELETE
-// ═══════════════════════
-function confirmDeleteAgent(agentId) {
-  const a = agents.find(x=>x.id===agentId); if (!a) return;
-  const n = agentHabils(agentId).length;
-  openConfirmDialog({
-    title:'Supprimer l\'agent ?',
-    message:`${a.nom} ${a.prenom} sera supprimé${n>0?' ainsi que ses '+n+' habilitation(s)':''}.`,
-    confirmLabel:'Supprimer', confirmClass:'btn-danger',
-    onConfirm: () => {
-      agents = agents.filter(x=>x.id!==agentId);
-      habilitations = habilitations.filter(h=>h.agentId!==agentId);
-      markUnsaved(); renderAll(); toast('Agent supprimé','info');
-    }
-  });
-}
-
-function confirmDeleteHabil(hId) {
-  const h = habilitations.find(x=>x.id===hId); if (!h) return;
-  openConfirmDialog({
-    title:'Supprimer l\'habilitation ?',
-    message:`Supprimer l'accès de ${agentName(h.agentId)} à ${logicielName(h.logicielId)} ?`,
-    confirmLabel:'Supprimer', confirmClass:'btn-danger',
-    onConfirm: () => { habilitations=habilitations.filter(x=>x.id!==hId); markUnsaved(); renderAll(); toast('Habilitation supprimée','info'); }
-  });
-}
-
-// ═══════════════════════
-// HELPERS FORM
-// ═══════════════════════
-function setSelectVal(id, val) {
-  const s=document.getElementById(id); if (!s) return;
-  for (let i=0;i<s.options.length;i++) { if (s.options[i].value===val||s.options[i].text===val) { s.selectedIndex=i; return; } }
-}
-
-// ═══════════════════════
-// SECURITY PANEL
-// ═══════════════════════
-function renderSecurityPanel() {
-  const status=document.getElementById('securityStatus');
-  const icon=document.getElementById('secStatusIcon');
-  const title=document.getElementById('secStatusTitle');
-  const sub=document.getElementById('secStatusSub');
-  const warn=document.getElementById('securityPendingWarn');
-  const actions=document.getElementById('securityActions');
-  if (!status||!actions) return;
-  const isEnc = !!(currentFile&&currentFile.encrypted);
-  if (isEnc) {
-    status.classList.add('encrypted'); icon.textContent='🔒';
-    title.textContent='Fichier chiffré (AES-256-GCM)';
-    sub.textContent='Sauvegardé avec l\'extension .habil.';
-  } else {
-    status.classList.remove('encrypted'); icon.textContent='🔓';
-    title.textContent='Fichier non chiffré'; sub.textContent='Données en clair (.xlsx).';
-  }
-  warn.style.display = pendingSecurityChange ? 'flex' : 'none';
-  actions.innerHTML = isEnc
-    ? `<button class="btn btn-ghost" onclick="openChangePwdForm()">🔑 Changer le mot de passe</button>
-       <button class="btn btn-danger" onclick="confirmDisableEncryption()">🔓 Désactiver le chiffrement</button>
-       <div id="securityFormSlot"></div>`
-    : `<button class="btn btn-primary" onclick="openEnableEncForm()">🔒 Activer le chiffrement</button>
-       <div id="securityFormSlot"></div>`;
-  const ind=document.getElementById('encryptIndicator');
-  const ic=document.getElementById('encIcon');
-  const lb=document.getElementById('encLabel');
-  if (!ind) return;
-  ind.classList.toggle('locked',isEnc&&!pendingSecurityChange);
-  ind.classList.toggle('pending',pendingSecurityChange);
-  if (pendingSecurityChange) { ic.textContent='⏳'; lb.textContent='Sécurité : sauvegarde requise'; }
-  else if (isEnc) { ic.textContent='🔒'; lb.textContent='Chiffré (.habil)'; }
-  else { ic.textContent='🔓'; lb.textContent='Non chiffré'; }
-  document.getElementById('saveBtn').classList.toggle('btn-attention',pendingSecurityChange);
-}
-
-function openEnableEncForm() {
-  document.getElementById('securityFormSlot').innerHTML = `
-    <div class="pwd-form">
-      <div class="pwd-form-title">🔒 Activer le chiffrement AES-256</div>
-      <div class="pwd-form-hint">Mot de passe robuste (min. 4 caractères). Sans lui, le fichier sera définitivement illisible.</div>
-      <div class="pwd-row"><input type="password" class="form-control" id="encNewPwd" placeholder="Mot de passe…" autocomplete="new-password">
-      <button class="pwd-show-btn" onclick="togglePwdVis('encNewPwd',this)">👁</button></div>
-      <div class="pwd-row"><input type="password" class="form-control" id="encConfirmPwd" placeholder="Confirmer…" autocomplete="new-password"></div>
-      <div class="pwd-form-actions">
-        <button class="btn btn-ghost" onclick="closeSecurityForm()">Annuler</button>
-        <button class="btn btn-primary" onclick="applyEnableEnc()">Activer</button>
+      <div style="padding:12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);line-height:1.6;">
+        <strong>⚠️ Important :</strong><br>
+        • Le mot de passe n'est jamais stocké<br>
+        • Il sera nécessaire à chaque ouverture du fichier<br>
+        • Une clé de récupération sera générée pour récupérer vos données en cas d'oubli
       </div>
-    </div>`;
-  setTimeout(()=>document.getElementById('encNewPwd').focus(),50);
-}
-function applyEnableEnc() {
-  const np=document.getElementById('encNewPwd').value, cp=document.getElementById('encConfirmPwd').value;
-  if (!np||np.length<4) { toast('Mot de passe trop court','error'); return; }
-  if (np!==cp) { toast('Les mots de passe ne correspondent pas','error'); return; }
-  currentFile.encrypted=true; currentFile.password=np; pendingSecurityChange=true;
-  markUnsaved(); closeSecurityForm(); renderSecurityPanel(); toast('Chiffrement configuré — sauvegardez','info');
-}
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="passwordModalCancel">Annuler</button>
+      <button class="btn btn-primary" id="passwordModalConfirm">✓ Valider</button>
+    </div>
+  </div>
+</div>
 
-function openChangePwdForm() {
-  document.getElementById('securityFormSlot').innerHTML = `
-    <div class="pwd-form">
-      <div class="pwd-form-title">🔑 Changer le mot de passe</div>
-      <div class="pwd-row"><input type="password" class="form-control" id="pwdCurrent" placeholder="Mot de passe actuel" autocomplete="current-password">
-      <button class="pwd-show-btn" onclick="togglePwdVis('pwdCurrent',this)">👁</button></div>
-      <div class="pwd-row"><input type="password" class="form-control" id="pwdNew" placeholder="Nouveau mot de passe" autocomplete="new-password"></div>
-      <div class="pwd-row"><input type="password" class="form-control" id="pwdNewC" placeholder="Confirmer" autocomplete="new-password"></div>
-      <div class="pwd-form-actions">
-        <button class="btn btn-ghost" onclick="closeSecurityForm()">Annuler</button>
-        <button class="btn btn-primary" onclick="applyChangePwd()">Mettre à jour</button>
+<!-- RECOVERY KEY MODAL -->
+<div class="modal-overlay" id="recoveryKeyModalOverlay">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">🔑 Clé de récupération générée</div>
+        <div class="modal-subtitle">Sauvegardez cette clé en lieu sûr !</div>
       </div>
-    </div>`;
-  setTimeout(()=>document.getElementById('pwdCurrent').focus(),50);
-}
-function applyChangePwd() {
-  const cur=document.getElementById('pwdCurrent').value, np=document.getElementById('pwdNew').value, cp=document.getElementById('pwdNewC').value;
-  if (cur!==currentFile.password) { toast('Mot de passe actuel incorrect','error'); return; }
-  if (!np||np.length<4) { toast('Nouveau mot de passe trop court','error'); return; }
-  if (np!==cp) { toast('Les mots de passe ne correspondent pas','error'); return; }
-  if (np===cur) { toast('Identique à l\'actuel','error'); return; }
-  currentFile.password=np; pendingSecurityChange=true; markUnsaved(); closeSecurityForm(); renderSecurityPanel(); toast('Mot de passe modifié — sauvegardez','info');
-}
-function confirmDisableEncryption() {
-  openConfirmDialog({ title:'Désactiver le chiffrement ?', message:'Le fichier sera sauvegardé en clair (.xlsx). Continuer ?', confirmLabel:'Désactiver', confirmClass:'btn-danger',
-    onConfirm: () => { currentFile.encrypted=false; currentFile.password=''; pendingSecurityChange=true; markUnsaved(); renderSecurityPanel(); toast('Chiffrement désactivé — sauvegardez','info'); }
-  });
-}
-function closeSecurityForm() { const s=document.getElementById('securityFormSlot'); if(s) s.innerHTML=''; }
-function togglePwdVis(id,btn) { const i=document.getElementById(id); if(!i) return; i.type=i.type==='password'?'text':'password'; btn.textContent=i.type==='password'?'👁':'🙈'; }
+    </div>
+    <div class="modal-body">
+      <div style="padding:14px;background:var(--orange-bg);border:2px solid var(--orange);border-radius:10px;margin-bottom:16px;">
+        <strong style="color:var(--orange);font-size:14px;">⚠️ TRÈS IMPORTANT</strong>
+        <p style="margin:8px 0 0 0;font-size:13px;line-height:1.6;color:var(--text);">
+          Cette clé permet de récupérer votre mot de passe en cas d'oubli.<br>
+          <strong>Sans cette clé, vos données seront définitivement perdues si vous oubliez votre mot de passe.</strong>
+        </p>
+      </div>
 
-// ═══════════════════════
-// CONFIRM DIALOG
-// ═══════════════════════
-let confirmCb = null;
-function openConfirmDialog({ title, message, confirmLabel='Confirmer', confirmClass='btn-danger', onConfirm }) {
-  document.getElementById('confirmTitle').textContent = title;
-  document.getElementById('confirmMsg').textContent = message;
-  const btn=document.getElementById('confirmBtn'); btn.textContent=confirmLabel; btn.className='btn '+confirmClass;
-  confirmCb = () => { onConfirm&&onConfirm(); closeConfirm(); };
-  document.getElementById('confirmOverlay').classList.add('show');
-}
-function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('show'); confirmCb=null; }
-document.getElementById('confirmBtn').addEventListener('click', ()=>{ if(confirmCb) confirmCb(); });
+      <div class="form-group">
+        <label class="form-label">CLÉ DE RÉCUPÉRATION (24 MOTS)</label>
+        <textarea id="recoveryKeyDisplay" readonly class="form-control" style="font-family:monospace;font-size:12px;height:120px;resize:none;background:var(--surface2);"></textarea>
+      </div>
 
-// ═══════════════════════
-// TOAST
-// ═══════════════════════
-function toast(msg, type='info') {
-  const icons={success:'✅',error:'❌',info:'ℹ️'};
-  const t=document.createElement('div'); t.className=`toast ${type}`;
-  t.innerHTML=`<span class="toast-icon">${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
-  document.getElementById('toast-container').appendChild(t);
-  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(()=>t.remove(),300); },3500);
-}
-function showSplashError(msg) { const e=document.getElementById('splashError'); e.textContent=msg; e.classList.add('show'); }
-function hideSplashError() { document.getElementById('splashError').classList.remove('show'); }
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button class="btn btn-ghost" style="flex:1;" onclick="copyRecoveryKey()">📋 Copier</button>
+        <button class="btn btn-ghost" style="flex:1;" onclick="downloadRecoveryKeyFile()">💾 Télécharger</button>
+      </div>
 
-// ═══════════════════════
-// DÉCONNEXION
-// ═══════════════════════
-function confirmDisconnect() {
-  if (unsaved) {
-    openConfirmDialog({
-      title: 'Fermer le registre ?',
-      message: "Des modifications non sauvegardées seront perdues. Sauvegardez d'abord (💾) ou confirmez la fermeture.",
-      confirmLabel: 'Fermer sans sauvegarder',
-      confirmClass: 'btn-danger',
-      onConfirm: disconnect
-    });
-  } else {
-    disconnect();
-  }
-}
+      <label style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--surface2);border-radius:8px;cursor:pointer;user-select:none;">
+        <input type="checkbox" id="recoveryKeySavedCheck" style="width:18px;height:18px;cursor:pointer;">
+        <span style="font-size:13px;line-height:1.4;">
+          <strong>J'ai sauvegardé ma clé de récupération</strong> dans un endroit sécurisé (coffre-fort, gestionnaire de mots de passe, etc.)
+        </span>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="recoveryKeyConfirm" disabled onclick="closeRecoveryKeyModal()">✓ J'ai sauvegardé ma clé</button>
+    </div>
+  </div>
+</div>
 
-function disconnect() {
-  // Réinitialiser l'état complet
-  agents = []; logiciels = []; habilitations = [];
-  params = { services:[], postes:[], roles:[], permissions:[], revisionPeriod:12, alertDays:30 };
-  currentFile = null; unsaved = false; pendingSecurityChange = false;
-  agentSortCol = null; agentSortAsc = true;
-  habilSortCol = null; habilSortAsc = true;
-  editingAgentId = null; editingHabilId = null; agentHabilLines = [];
+<!-- RECOVERY MODAL -->
+<div class="modal-overlay" id="recoveryModalOverlay">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">🔑 Récupération par clé</div>
+        <div class="modal-subtitle">Saisissez votre clé de récupération de 24 mots</div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div style="padding:12px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--text);line-height:1.6;">
+        <strong>ℹ️ Récupération de mot de passe</strong><br>
+        Saisissez les 24 mots de votre clé de récupération. Votre mot de passe sera automatiquement récupéré.
+      </div>
 
-  // Réinitialiser le splash
-  document.getElementById('fileInput').value = '';
-  document.getElementById('splashPwd').value = '';
-  document.getElementById('pwdLengthHint').textContent = '';
-  document.getElementById('splashError').classList.remove('show');
-  encryptCheck.checked = false;
-  encryptToggle.classList.remove('on');
-  pwdField.classList.remove('show');
-  splashFile = null;
-  const dropP = document.querySelector('#fileDrop p');
-  if (dropP) dropP.innerHTML = '<strong>Glissez-déposez</strong> votre fichier ici<br>ou cliquez pour parcourir<br><small style="color:var(--text3)">Formats acceptés : .xlsx · .habil (chiffré)</small>';
+      <div class="form-group">
+        <label class="form-label">CLÉ DE RÉCUPÉRATION (24 MOTS) <span class="required">*</span></label>
+        <textarea id="recoveryKeyInput" class="form-control" placeholder="Saisissez les 24 mots séparés par des espaces..." style="font-family:monospace;font-size:12px;height:100px;"></textarea>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Les mots doivent être séparés par des espaces</div>
+      </div>
 
-  // Revenir à l'écran d'accueil
-  document.getElementById('app').classList.remove('show');
-  const splash = document.getElementById('splash');
-  splash.classList.remove('hidden');
-  // Remettre l'onglet Dashboard actif pour la prochaine session
-  switchTab('dashboard');
-}
+      <div id="recoveryError" style="display:none;padding:10px;background:var(--red-bg);border:1px solid var(--red);border-radius:6px;color:var(--red);font-size:12px;margin-top:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeRecoveryModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="attemptRecovery()">🔓 Récupérer le mot de passe</button>
+    </div>
+  </div>
+</div>
 
-// ═══════════════════════
-// EVENTS
-// ═══════════════════════
-document.getElementById('agentModalOverlay').addEventListener('click', e=>{ if(e.target===document.getElementById('agentModalOverlay')) closeAgentModal(); });
-document.getElementById('habilModalOverlay').addEventListener('click', e=>{ if(e.target===document.getElementById('habilModalOverlay')) closeHabilModal(); });
-document.getElementById('confirmOverlay').addEventListener('click', e=>{ if(e.target===document.getElementById('confirmOverlay')) closeConfirm(); });
+<div id="toast-container"></div>
 
-document.addEventListener('keydown', e=>{
-  if (e.key==='Escape') { closeAgentModal(); closeHabilModal(); closeConfirm(); }
-  if ((e.ctrlKey||e.metaKey)&&e.key==='s') { e.preventDefault(); if(document.getElementById('app').classList.contains('show')) saveFile(); }
-});
-
-window.addEventListener('beforeunload', e=>{
-  if (unsaved&&document.getElementById('app').classList.contains('show')) { e.preventDefault(); e.returnValue=''; }
-});
-</script>
+<script src="js/utils.js"></script>
+<script src="js/data.js"></script>
+<script src="js/security.js"></script>
+<script src="js/recovery.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/pagination.js"></script>
+<script src="js/files.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
