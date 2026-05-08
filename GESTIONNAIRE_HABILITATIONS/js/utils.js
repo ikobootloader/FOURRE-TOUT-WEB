@@ -83,5 +83,38 @@ const Utils = {
       'En attente': 'attente'
     };
     return `<span class="badge badge-${map[s] || 'inactif'}">${s || '—'}</span>`;
+  },
+
+  /**
+   * Génère le HTML pour un valideur avec lien vers l'agent si trouvé
+   * @param {string} valideurName - Nom du valideur
+   * @returns {string} HTML du valideur (lien si agent trouvé, texte sinon)
+   */
+  valideurLink(valideurName) {
+    if (!valideurName) return '—';
+
+    // Rechercher l'agent correspondant
+    const agent = DataModel.agents.find(a => {
+      const fullName = `${a.nom} ${a.prenom}`.trim();
+      return fullName.toLowerCase() === valideurName.toLowerCase();
+    });
+
+    if (agent) {
+      return `<a href="#" onclick="event.preventDefault(); UI.openAgentModal('${agent.id}');" style="color:var(--accent);text-decoration:none;cursor:pointer;" title="Voir la fiche agent">${this.esc(valideurName)}</a>`;
+    } else {
+      return this.esc(valideurName);
+    }
+  },
+
+  /**
+   * Formatte un array de groupes de sécurité en badges
+   * @param {Array} groupes - Liste des groupes
+   * @returns {string} HTML des badges groupes
+   */
+  groupesBadges(groupes) {
+    if (!groupes || groupes.length === 0) return '—';
+    return groupes.map(g =>
+      `<span class="groupe-badge">${this.esc(g)}</span>`
+    ).join(' ');
   }
 };

@@ -2,6 +2,139 @@
 
 Historique des modifications du Gestionnaire d'Habilitations.
 
+## [2.4.0] - 2026-05-08
+
+### Refonte du header avec icônes uniquement
+
+#### Indicateur de sauvegarde unifié avec Material Symbols
+- **[gestion_habilitations.html:17](gestion_habilitations.html#L17)** : Intégration de Material Symbols Outlined de Google Fonts
+- **[gestion_habilitations.html:76-80](gestion_habilitations.html#L76-L80)** : Fusion des indicateurs de sauvegarde en un seul
+- **[css/styles.css:209-244](css/styles.css#L209-L244)** : Système d'icônes superposées avec position absolute
+- **[js/ui.js:68-122](js/ui.js#L68-L122)** : Logique de transition entre 3 états
+- **États de l'indicateur unique** :
+  - Non sauvegardé : ○ (cercle vide, background gris)
+  - Sauvegarde en cours : sync Material Symbols qui tourne (background bleu)
+  - Sauvegardé : ✓ (check, background vert)
+- **Animation optimisée** : Seule l'icône sync tourne, pas le conteneur background
+- Transitions fluides entre les états avec délais progressifs
+
+#### Simplification des boutons
+- **[gestion_habilitations.html:83-89](gestion_habilitations.html#L83-L89)** : Retrait des textes, conservation des icônes uniquement
+- **[css/styles.css:246-259](css/styles.css#L246-L259)** : Refonte encrypt-indicator (icône uniquement)
+- Tous les boutons avec attribut `title` pour tooltips au survol
+- Interface plus épurée et moderne
+- Gain d'espace dans le header
+
+### Import Excel depuis l'application
+
+#### Bouton d'import dans le header
+- **[gestion_habilitations.html:82](gestion_habilitations.html#L82)** : Ajout du bouton "⬆ Importer Excel" dans le header
+- Accessible à tout moment une fois le registre chargé
+- Input file caché pour sélection de fichiers .xlsx
+
+#### Modale d'options d'import
+- **[gestion_habilitations.html:614-659](gestion_habilitations.html#L614-L659)** : Modale de choix du mode d'importation
+- **Mode fusion** (recommandé) : Fusionne les données importées avec les existantes
+  - Mise à jour des éléments existants (même ID)
+  - Ajout des nouveaux éléments
+  - Conservation des données actuelles non présentes dans le fichier
+- **Mode remplacement** : Remplace toutes les données par celles du fichier
+  - Action irréversible avec avertissement visuel
+
+#### Logique de fusion intelligente
+- **[js/files.js:342-423](js/files.js#L342-L423)** : Fonction `mergeData()` pour fusion des données
+- Fusion par ID pour agents, logiciels et habilitations
+- Ajout non-duplicatif des valeurs de paramètres (services, postes, rôles, permissions)
+- Migration automatique des données après fusion
+
+#### Fonctions globales d'import
+- **[js/app.js:764-869](js/app.js#L764-L869)** : Fonctions `handleImportExcel()`, `closeImportExcelModal()`, `confirmImportExcel()`
+- Validation du format de fichier (.xlsx uniquement)
+- Comptage et affichage du nombre d'éléments importés
+- Marquage automatique comme non sauvegardé après import
+- Rafraîchissement complet de l'interface
+
+#### Cas d'usage
+- Import de données depuis un export Excel précédent
+- Synchronisation entre plusieurs registres
+- Restauration partielle de données
+- Migration de données depuis d'autres sources
+
+## [2.3.0] - 2026-05-08
+
+### Groupes de sécurité multiples
+
+#### Groupes par logiciel
+- **[js/data.js](js/data.js)** : Ajout du champ `groupes[]` aux logiciels pour définir les groupes de sécurité par défaut
+- **[js/render.js:307-323](js/render.js#L307-L323)** : Interface de gestion des groupes dans l'éditeur de logiciels (chips)
+- **[js/ui.js:468-501](js/ui.js#L468-L501)** : Fonctions `addGroupeLogiciel()` et `removeGroupeLogiciel()`
+- **[css/styles.css:440-447](css/styles.css#L440-L447)** : Styles pour les chips de groupes
+
+#### Groupes multiples par habilitation
+- **[js/data.js:69-95](js/data.js#L69-L95)** : Migration automatique `groupe` (string) → `groupes` (array)
+- **[gestion_habilitations.html:429-433](gestion_habilitations.html#L429-L433)** : Interface multi-sélection avec chips
+- **[js/ui.js:388-469](js/ui.js#L388-L469)** : Gestion complète des groupes dans la modale d'habilitation
+- **[css/styles.css:461-466](css/styles.css#L461-L466)** : Styles pour les groupes dans la modale
+
+#### Suggestions intelligentes
+- **[js/ui.js:822-841](js/ui.js#L822-L841)** : Fonction `onHabilLogicielChange()` suggère les groupes du logiciel sélectionné
+- Les groupes définis au niveau logiciel apparaissent dans la datalist lors de la création d'habilitations
+
+#### Export/Import Excel
+- **[js/files.js:189-193](js/files.js#L189-L193)** : Export des groupes des logiciels (colonne "Groupes")
+- **[js/files.js:204](js/files.js#L204)** : Export des groupes multiples des habilitations (séparés par virgule)
+- **[js/files.js:273-277](js/files.js#L273-L277)** : Import avec support rétrocompatibilité (ancien champ "Groupe" unique)
+- **[js/files.js:279-303](js/files.js#L279-L303)** : Import des groupes multiples avec parsing intelligent
+
+### Autocomplétion valideurs
+
+#### Suggestions agents existants
+- **[gestion_habilitations.html:436](gestion_habilitations.html#L436)** : Champ valideur avec autocomplétion
+- **[js/ui.js:510-541](js/ui.js#L510-L541)** : Fonction `onValideurInput()` avec recherche intelligente
+- **[js/ui.js:543-555](js/ui.js#L543-L555)** : Sélection depuis les suggestions
+- **[css/styles.css:450-457](css/styles.css#L450-L457)** : Styles dropdown d'autocomplétion
+
+#### Création rapide d'agents
+- **[gestion_habilitations.html:578-603](gestion_habilitations.html#L578-L603)** : Modale légère de création agent (Nom, Prénom, Service)
+- **[js/ui.js:567-651](js/ui.js#L567-L651)** : Fonctions `showQuickAgentModal()`, `saveQuickAgent()`
+- Création automatique d'agent si valideur introuvable dans la base
+- Parsing intelligent du nom complet saisi (Nom Prénom)
+
+### Liens valideurs vers agents
+
+#### Affichage amélioré
+- **[js/utils.js:88-104](js/utils.js#L88-L104)** : Fonction `valideurLink()` génère un lien cliquable si agent trouvé
+- **[js/render.js:198,250](js/render.js#L198,250)** : Valideurs affichés comme liens dans les tables
+- Clic sur valideur ouvre directement la fiche agent correspondante
+
+#### Badges groupes
+- **[js/utils.js:106-116](js/utils.js#L106-L116)** : Fonction `groupesBadges()` pour affichage élégant
+- **[js/render.js:196](js/render.js#L196)** : Affichage des groupes multiples en badges dans les tables
+- **[css/styles.css:468-469](css/styles.css#L468-L469)** : Styles badges groupes (monospace, couleur bleue)
+
+### Migration et rétrocompatibilité
+
+#### Migration automatique des données
+- **[js/data.js:73-95](js/data.js#L73-L95)** : Fonction `migrateData()` appelée au chargement
+- Conversion automatique `groupe` string → `groupes` array
+- Ajout des champs `groupes[]` aux logiciels existants
+- Ajout des champs `valideurs[]` aux logiciels existants
+
+#### Support formats anciens
+- **[js/files.js:280-290](js/files.js#L280-L290)** : Import Excel avec support "Groupe" (singulier) et "Groupes" (pluriel)
+- **[js/render.js:147-150](js/render.js#L147-L150)** : Recherche et filtres adaptés aux groupes multiples
+- Aucune perte de données lors de la migration
+
+### Corrections techniques
+
+#### Ajustements render.js
+- **[js/render.js:147,163](js/render.js#L147,163)** : Correction filtrage et tri pour groupes array
+- Recherche fulltext inclut tous les groupes de sécurité
+
+#### Ajustements ui.js
+- **[js/ui.js:151](js/ui.js#L151)** : Correction chargement habilitations agent (`groupes` au lieu de `groupe`)
+- **[js/ui.js:859-866](js/ui.js#L859-L866)** : Fonction `saveHabil()` complète avec sauvegarde des groupes multiples
+
 ## [2.2.1] - 2026-05-07
 
 ### Corrections de bugs

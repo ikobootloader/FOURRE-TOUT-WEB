@@ -14,6 +14,7 @@
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="css/styles.css">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
 
 </head>
 <body>
@@ -64,7 +65,7 @@
 <!-- APP -->
 <div id="app">
   <header class="header">
-    <div class="header-logo">Habilitations <span>·</span> Admin</div>
+    <div class="header-logo">Habilitations <span>·</span></div>
     <nav class="nav-tabs">
       <div class="nav-tab active" data-tab="dashboard" onclick="switchTab('dashboard')"><span class="tab-icon">◈</span> Tableau de bord</div>
       <div class="nav-tab" data-tab="agents" onclick="switchTab('agents')"><span class="tab-icon">👤</span> Agents</div>
@@ -73,16 +74,20 @@
       <div class="nav-tab" data-tab="settings" onclick="switchTab('settings')"><span class="tab-icon">⚙</span> Paramètres</div>
     </nav>
     <div class="header-actions">
-      <span class="save-indicator" id="saveIndicator">Non sauvegardé</span>
-      <span class="encrypt-indicator" id="encryptIndicator" onclick="switchTab('settings')">
-        <span id="encIcon">🔓</span><span id="encLabel">Non chiffré</span>
+      <span class="save-indicator" id="saveIndicator" title="État de sauvegarde">
+        <span class="save-icon" id="saveIcon"></span>
+        <span class="material-symbols-outlined save-sync" id="saveSync" style="display:none;">sync</span>
       </span>
-      <span class="autosave-indicator" id="autosaveIndicator" style="display:none;" title="Sauvegarde automatique en cours">↻</span>
-      <button class="theme-toggle" onclick="toggleTheme()"><span class="theme-icon-sun">☀</span><span class="theme-icon-moon">☾</span></button>
-      <button class="btn btn-ghost btn-sm" onclick="exportFile()">⬇ Export audit (.xlsx)</button>
-      <button class="btn btn-primary btn-sm" onclick="saveFile()" id="saveBtn">💾 Sauvegarder</button>
+      <span class="encrypt-indicator" id="encryptIndicator" onclick="switchTab('settings')" title="État du chiffrement">
+        <span id="encIcon">🔓</span>
+      </span>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Basculer le thème clair/sombre"><span class="theme-icon-sun">☀</span><span class="theme-icon-moon">☾</span></button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importExcelInput').click()" title="Importer des données depuis un fichier Excel">⬆</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportFile()" title="Exporter un audit en Excel (non chiffré)">⬇</button>
+      <button class="btn btn-primary btn-sm" onclick="saveFile()" id="saveBtn" title="Sauvegarder le registre">💾</button>
+      <input type="file" id="importExcelInput" accept=".xlsx" style="display:none;" onchange="handleImportExcel(this)">
       <div style="width:1px;height:24px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>
-      <button class="btn btn-ghost btn-sm" onclick="confirmDisconnect()" title="Fermer le registre et revenir à l'écran d'accueil" style="color:var(--text2);">⏏ Fermer</button>
+      <button class="btn btn-ghost btn-sm" onclick="confirmDisconnect()" title="Fermer le registre et revenir à l'écran d'accueil" style="color:var(--text2);">⏏</button>
     </div>
   </header>
 
@@ -426,15 +431,20 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">GROUPE DE SÉCURITÉ</label>
-          <input class="form-control" id="hGroupe" placeholder="Ex : GRP_APP_LECTURE…" list="hGroupeList" autocomplete="off">
+          <label class="form-label">GROUPES DE SÉCURITÉ</label>
+          <div class="habil-groupes-container" id="hGroupesContainer"></div>
+          <div class="add-habil-groupe-row">
+            <input class="form-control" id="hGroupeInput" placeholder="Ex : GRP_APP_LECTURE…" list="hGroupeList" autocomplete="off">
+            <button class="btn btn-primary btn-sm" onclick="addHabilGroupe()" style="flex-shrink:0;">＋</button>
+          </div>
           <datalist id="hGroupeList"></datalist>
           <div id="hGroupeSuggest" style="font-size:11px;color:var(--text3);margin-top:3px;"></div>
         </div>
         <div class="form-group">
           <label class="form-label">RESPONSABLE VALIDEUR</label>
-          <input class="form-control" id="hValideur" placeholder="Nom du responsable">
-          <div id="hValideurSuggest" style="font-size:11px;color:var(--text3);margin-top:3px;"></div>
+          <input class="form-control" id="hValideur" placeholder="Taper pour rechercher un agent..." autocomplete="off" oninput="UI.onValideurInput()">
+          <datalist id="hValideurList"></datalist>
+          <div id="hValideurSuggest" class="valideur-autocomplete-suggestions"></div>
         </div>
         <div class="form-group">
           <label class="form-label">DATE PROCHAINE RÉVISION</label>
@@ -568,6 +578,92 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeRecoveryModal()">Annuler</button>
       <button class="btn btn-primary" onclick="attemptRecovery()">🔓 Récupérer le mot de passe</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modale création rapide agent -->
+<div class="modal-overlay" id="quickAgentModalOverlay">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">➕ Créer un agent</div>
+        <div class="modal-subtitle">Création rapide depuis le valideur</div>
+      </div>
+      <button class="modal-close" onclick="closeQuickAgentModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">NOM</label>
+        <input class="form-control" id="qaName" placeholder="Nom de famille">
+      </div>
+      <div class="form-group">
+        <label class="form-label">PRÉNOM</label>
+        <input class="form-control" id="qaFirstName" placeholder="Prénom">
+      </div>
+      <div class="form-group">
+        <label class="form-label">SERVICE</label>
+        <input class="form-control" id="qaService" placeholder="Service/Département" list="qaServiceList">
+        <datalist id="qaServiceList"></datalist>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeQuickAgentModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveQuickAgent()">✓ Créer l'agent</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT EXCEL MODAL -->
+<div class="modal-overlay" id="importExcelModalOverlay">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">📥 Importer des données Excel</div>
+        <div class="modal-subtitle">Choisissez comment traiter les données importées</div>
+      </div>
+      <button class="modal-close" onclick="closeImportExcelModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="padding:12px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--text);line-height:1.6;">
+        <strong>ℹ️ Fichier sélectionné</strong><br>
+        <span id="importExcelFileName" style="font-family:monospace;font-size:11px;"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">MODE D'IMPORTATION</label>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:8px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;"
+                 onmouseover="this.style.borderColor='var(--accent)'"
+                 onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='transparent'">
+            <input type="radio" name="importMode" value="merge" checked style="margin-top:2px;flex-shrink:0;" onchange="updateImportModeStyle()">
+            <div style="flex:1;">
+              <div style="font-weight:600;margin-bottom:4px;">🔄 Fusionner (recommandé)</div>
+              <div style="font-size:12px;color:var(--text3);line-height:1.5;">
+                Ajoute les nouvelles données et met à jour les existantes (basé sur les ID).<br>
+                Les données actuelles non présentes dans le fichier sont conservées.
+              </div>
+            </div>
+          </label>
+
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface2);border-radius:8px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;"
+                 onmouseover="this.style.borderColor='var(--red)'"
+                 onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='transparent'">
+            <input type="radio" name="importMode" value="replace" style="margin-top:2px;flex-shrink:0;" onchange="updateImportModeStyle()">
+            <div style="flex:1;">
+              <div style="font-weight:600;margin-bottom:4px;color:var(--red);">⚠️ Remplacer tout</div>
+              <div style="font-size:12px;color:var(--text3);line-height:1.5;">
+                Supprime toutes les données actuelles et les remplace par celles du fichier.<br>
+                <strong style="color:var(--red);">Action irréversible !</strong>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeImportExcelModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmImportExcel()">📥 Importer</button>
     </div>
   </div>
 </div>

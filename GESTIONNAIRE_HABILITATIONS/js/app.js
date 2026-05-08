@@ -760,6 +760,117 @@ async function attemptRecovery() {
   }
 }
 
+// Variables globales pour l'import Excel
+let _pendingImportFile = null;
+
+/**
+ * Gère la sélection d'un fichier Excel à importer
+ * @param {HTMLInputElement} input - Input file
+ */
+async function handleImportExcel(input) {
+  if (!input.files || !input.files[0]) return;
+
+  const file = input.files[0];
+
+  // Vérifier que c'est bien un fichier Excel
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    UI.toast('Veuillez sélectionner un fichier Excel (.xlsx)', 'error');
+    input.value = ''; // Reset input
+    return;
+  }
+
+  // Stocker le fichier temporairement
+  _pendingImportFile = file;
+
+  // Afficher le nom du fichier dans la modale
+  document.getElementById('importExcelFileName').textContent = file.name;
+
+  // Réinitialiser le mode à "fusion"
+  document.querySelector('input[name="importMode"][value="merge"]').checked = true;
+  updateImportModeStyle();
+
+  // Afficher la modale
+  document.getElementById('importExcelModalOverlay').classList.add('show');
+
+  // Reset input pour permettre la resélection du même fichier
+  input.value = '';
+}
+
+/**
+ * Ferme la modale d'import Excel
+ */
+function closeImportExcelModal() {
+  document.getElementById('importExcelModalOverlay').classList.remove('show');
+  _pendingImportFile = null;
+}
+
+/**
+ * Met à jour le style des options selon la sélection
+ */
+function updateImportModeStyle() {
+  const radios = document.querySelectorAll('input[name="importMode"]');
+  radios.forEach(radio => {
+    const label = radio.closest('label');
+    if (radio.checked) {
+      if (radio.value === 'replace') {
+        label.style.borderColor = 'var(--red)';
+      } else {
+        label.style.borderColor = 'var(--accent)';
+      }
+    } else {
+      label.style.borderColor = 'transparent';
+    }
+  });
+}
+
+/**
+ * Confirme et exécute l'import Excel
+ */
+async function confirmImportExcel() {
+  if (!_pendingImportFile) {
+    UI.toast('Aucun fichier sélectionné', 'error');
+    return;
+  }
+
+  // Récupérer le mode d'import sélectionné
+  const mode = document.querySelector('input[name="importMode"]:checked')?.value || 'merge';
+
+  try {
+    // Lire le fichier Excel
+    const arrayBuffer = await _pendingImportFile.arrayBuffer();
+    const importedData = FileManager.importExcel(arrayBuffer);
+
+    // Compter les éléments importés
+    const counts = {
+      agents: importedData.agents?.length || 0,
+      logiciels: importedData.logiciels?.length || 0,
+      habilitations: importedData.habilitations?.length || 0
+    };
+
+    if (mode === 'replace') {
+      // Mode remplacement : écraser toutes les données
+      DataModel.loadData(importedData);
+      UI.toast(`Données remplacées : ${counts.agents} agents, ${counts.logiciels} logiciels, ${counts.habilitations} habilitations`, 'success');
+    } else {
+      // Mode fusion : fusionner avec les données existantes
+      FileManager.mergeData(importedData);
+      UI.toast(`Données fusionnées : ${counts.agents} agents, ${counts.logiciels} logiciels, ${counts.habilitations} habilitations`, 'success');
+    }
+
+    // Marquer comme non sauvegardé et rafraîchir l'interface
+    DataModel.markUnsaved();
+    Renderer.renderAll();
+    UI.updateSaveIndicator();
+
+    // Fermer la modale
+    closeImportExcelModal();
+
+  } catch (error) {
+    console.error('Erreur lors de l\'import Excel:', error);
+    UI.toast('Erreur lors de l\'import : ' + error.message, 'error');
+  }
+}
+
 // Fonction pour délier le fichier
 async function unlinkFile() {
   await PersistentStorage.clearFileHandle();

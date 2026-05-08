@@ -189,7 +189,8 @@ const FileManager = {
     const logRows = data.logiciels.map(l => ({
       ID: l.id,
       Nom: l.nom,
-      Valideurs: l.valideurs ? l.valideurs.join(', ') : ''
+      Valideurs: (l.valideurs || []).join(', '),
+      Groupes: (l.groupes || []).join(', ')
     }));
     const wsLog = XLSX.utils.json_to_sheet(logRows);
     XLSX.utils.book_append_sheet(wb, wsLog, 'Logiciels');
@@ -201,7 +202,7 @@ const FileManager = {
       LogicielID: h.logicielId,
       Rôle: h.role,
       Permissions: h.permissions,
-      Groupe: h.groupe,
+      Groupes: (h.groupes || []).join(', '),
       Statut: h.statut,
       Valideur: h.valideur,
       DateCréation: h.dateCreation,
@@ -272,25 +273,37 @@ const FileManager = {
     const logiciels = XLSX.utils.sheet_to_json(wb.Sheets['Logiciels'] || {}).map(row => ({
       id: row.ID || Utils.uid(),
       nom: row.Nom || '',
-      valideurs: row.Valideurs ? row.Valideurs.split(',').map(v => v.trim()) : []
+      valideurs: row.Valideurs ? row.Valideurs.split(',').map(v => v.trim()).filter(v => v) : [],
+      groupes: row.Groupes ? row.Groupes.split(',').map(g => g.trim()).filter(g => g) : []
     }));
 
     // Lecture des habilitations
-    const habilitations = XLSX.utils.sheet_to_json(wb.Sheets['Habilitations'] || {}).map(row => ({
-      id: row.ID || Utils.uid(),
-      agentId: row.AgentID,
-      logicielId: row.LogicielID,
-      role: row.Rôle || '',
-      permissions: row.Permissions || '',
-      groupe: row.Groupe || '',
-      statut: row.Statut || 'Actif',
-      valideur: row.Valideur || '',
-      dateCreation: row.DateCréation || Utils.today(),
-      dateDerniereModif: row.DateModif || Utils.today(),
-      dateProchRevision: row.DateProchRevision || '',
-      dateDerniereValidation: row.DateDerniereValidation || '',
-      commentaires: row.Commentaires || ''
-    }));
+    const habilitations = XLSX.utils.sheet_to_json(wb.Sheets['Habilitations'] || {}).map(row => {
+      // Gestion rétrocompatibilité : ancien champ "Groupe" (singulier) et nouveau "Groupes" (pluriel)
+      let groupes = [];
+      if (row.Groupes) {
+        groupes = row.Groupes.split(',').map(g => g.trim()).filter(g => g);
+      } else if (row.Groupe) {
+        // Ancien format avec groupe unique
+        groupes = row.Groupe ? [row.Groupe] : [];
+      }
+
+      return {
+        id: row.ID || Utils.uid(),
+        agentId: row.AgentID,
+        logicielId: row.LogicielID,
+        role: row.Rôle || '',
+        permissions: row.Permissions || '',
+        groupes: groupes,
+        statut: row.Statut || 'Actif',
+        valideur: row.Valideur || '',
+        dateCreation: row.DateCréation || Utils.today(),
+        dateDerniereModif: row.DateModif || Utils.today(),
+        dateProchRevision: row.DateProchRevision || '',
+        dateDerniereValidation: row.DateDerniereValidation || '',
+        commentaires: row.Commentaires || ''
+      };
+    });
 
     // Lecture des paramètres
     const params = {};
@@ -320,5 +333,96 @@ const FileManager = {
     const result = await Security.decryptBytes(bytes, password);
     const json = new TextDecoder().decode(result.data);
     return JSON.parse(json);
+  },
+
+  /**
+   * Fusionne les données importées avec les données existantes
+   * Les nouveaux éléments sont ajoutés, les existants (même ID) sont mis à jour
+   * @param {Object} importedData - Données importées
+   */
+  mergeData(importedData) {
+    // Fusion des agents
+    if (importedData.agents && Array.isArray(importedData.agents)) {
+      importedData.agents.forEach(importAgent => {
+        const existingIndex = DataModel.agents.findIndex(a => a.id === importAgent.id);
+        if (existingIndex >= 0) {
+          // Mise à jour de l'agent existant
+          DataModel.agents[existingIndex] = { ...DataModel.agents[existingIndex], ...importAgent };
+        } else {
+          // Ajout du nouvel agent
+          DataModel.agents.push(importAgent);
+        }
+      });
+    }
+
+    // Fusion des logiciels
+    if (importedData.logiciels && Array.isArray(importedData.logiciels)) {
+      importedData.logiciels.forEach(importLog => {
+        const existingIndex = DataModel.logiciels.findIndex(l => l.id === importLog.id);
+        if (existingIndex >= 0) {
+          // Mise à jour du logiciel existant
+          DataModel.logiciels[existingIndex] = { ...DataModel.logiciels[existingIndex], ...importLog };
+        } else {
+          // Ajout du nouveau logiciel
+          DataModel.logiciels.push(importLog);
+        }
+      });
+    }
+
+    // Fusion des habilitations
+    if (importedData.habilitations && Array.isArray(importedData.habilitations)) {
+      importedData.habilitations.forEach(importHab => {
+        const existingIndex = DataModel.habilitations.findIndex(h => h.id === importHab.id);
+        if (existingIndex >= 0) {
+          // Mise à jour de l'habilitation existante
+          DataModel.habilitations[existingIndex] = { ...DataModel.habilitations[existingIndex], ...importHab };
+        } else {
+          // Ajout de la nouvelle habilitation
+          DataModel.habilitations.push(importHab);
+        }
+      });
+    }
+
+    // Fusion des paramètres (ajout uniquement des valeurs non présentes)
+    if (importedData.params) {
+      if (importedData.params.services) {
+        importedData.params.services.forEach(s => {
+          if (!DataModel.params.services.includes(s)) {
+            DataModel.params.services.push(s);
+          }
+        });
+      }
+      if (importedData.params.postes) {
+        importedData.params.postes.forEach(p => {
+          if (!DataModel.params.postes.includes(p)) {
+            DataModel.params.postes.push(p);
+          }
+        });
+      }
+      if (importedData.params.roles) {
+        importedData.params.roles.forEach(r => {
+          if (!DataModel.params.roles.includes(r)) {
+            DataModel.params.roles.push(r);
+          }
+        });
+      }
+      if (importedData.params.permissions) {
+        importedData.params.permissions.forEach(p => {
+          if (!DataModel.params.permissions.includes(p)) {
+            DataModel.params.permissions.push(p);
+          }
+        });
+      }
+      // Les valeurs numériques sont conservées de l'existant sauf si non définies
+      if (importedData.params.revisionPeriod && !DataModel.params.revisionPeriod) {
+        DataModel.params.revisionPeriod = importedData.params.revisionPeriod;
+      }
+      if (importedData.params.alertDays && !DataModel.params.alertDays) {
+        DataModel.params.alertDays = importedData.params.alertDays;
+      }
+    }
+
+    // Migration des données après fusion
+    DataModel.migrateData();
   }
 };

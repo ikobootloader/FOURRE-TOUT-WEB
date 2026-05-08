@@ -35,7 +35,8 @@ const DataModel = {
     habilSortAsc: true,
     editingAgentId: null,
     editingHabilId: null,
-    agentHabilLines: [] // Lignes temporaires dans la modale agent
+    agentHabilLines: [], // Lignes temporaires dans la modale agent
+    currentHabilGroupes: [] // Groupes temporaires de l'habilitation en cours d'édition
   },
 
   /**
@@ -67,6 +68,38 @@ const DataModel = {
     this.logiciels = data.logiciels || [];
     this.habilitations = data.habilitations || [];
     this.params = { ...this.params, ...data.params };
+
+    // Migration des données anciennes
+    this.migrateData();
+  },
+
+  /**
+   * Migration des données pour rétrocompatibilité
+   * - groupe (string) → groupes (array)
+   * - Ajoute groupes[] aux logiciels si absent
+   */
+  migrateData() {
+    // Migration logiciels : ajouter groupes[] si absent
+    this.logiciels.forEach(log => {
+      if (!log.groupes) {
+        log.groupes = [];
+      }
+      if (!log.valideurs) {
+        log.valideurs = [];
+      }
+    });
+
+    // Migration habilitations : groupe (string) → groupes (array)
+    this.habilitations.forEach(hab => {
+      if (hab.groupe && !hab.groupes) {
+        // Ancien format : groupe en string
+        hab.groupes = hab.groupe ? [hab.groupe] : [];
+        delete hab.groupe;
+      } else if (!hab.groupes) {
+        // Nouveau format sans données
+        hab.groupes = [];
+      }
+    });
   },
 
   /**
@@ -188,6 +221,8 @@ const DataModel = {
    */
   addLogiciel(logiciel) {
     if (!logiciel.id) logiciel.id = Utils.uid();
+    if (!logiciel.valideurs) logiciel.valideurs = [];
+    if (!logiciel.groupes) logiciel.groupes = [];
     this.logiciels.push(logiciel);
   },
 
@@ -212,6 +247,7 @@ const DataModel = {
     if (!habilitation.id) habilitation.id = Utils.uid();
     if (!habilitation.dateCreation) habilitation.dateCreation = Utils.today();
     if (!habilitation.dateDerniereModif) habilitation.dateDerniereModif = Utils.today();
+    if (!habilitation.groupes) habilitation.groupes = [];
     this.habilitations.push(habilitation);
   },
 

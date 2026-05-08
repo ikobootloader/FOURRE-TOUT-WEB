@@ -146,7 +146,8 @@ const Renderer = {
     let list = DataModel.habilitations.filter(h => {
       const a = DataModel.getAgent(h.agentId) || {};
       const l = DataModel.getLogiciel(h.logicielId) || {};
-      const txt = [a.nom, a.prenom, a.email, l.nom, h.role, h.permissions, h.groupe || '', h.valideur, h.statut].join(' ').toLowerCase();
+      const groupesStr = (h.groupes || []).join(' ');
+      const txt = [a.nom, a.prenom, a.email, l.nom, h.role, h.permissions, groupesStr, h.valideur, h.statut].join(' ').toLowerCase();
       return (!search || txt.includes(search)) && (!fLog || h.logicielId === fLog) && (!fStat || h.statut === fStat);
     });
 
@@ -160,7 +161,7 @@ const Renderer = {
           logiciel: (l.nom || '').toLowerCase(),
           role: (h.role || '').toLowerCase(),
           permissions: (h.permissions || '').toLowerCase(),
-          groupe: (h.groupe || '').toLowerCase(),
+          groupe: ((h.groupes || []).join(' ') || '').toLowerCase(),
           statut: (h.statut || '').toLowerCase(),
           valideur: (h.valideur || '').toLowerCase(),
           revision: h.dateProchRevision || '9'
@@ -193,9 +194,9 @@ const Renderer = {
         <td><span class="badge-logiciel">${Utils.esc(l.nom) || '?'}</span></td>
         <td class="muted">${Utils.esc(h.role) || '—'}</td>
         <td class="muted" style="font-size:12px">${Utils.esc(h.permissions) || '—'}</td>
-        <td class="muted" style="font-size:12px">${Utils.esc(h.groupe) || '—'}</td>
+        <td style="font-size:11px">${Utils.groupesBadges(h.groupes)}</td>
         <td>${Utils.statusBadge(h.statut)}</td>
-        <td class="muted">${Utils.esc(h.valideur) || '—'}</td>
+        <td class="muted">${Utils.valideurLink(h.valideur)}</td>
         <td>${dStr}</td>
         <td><div class="row-actions">
           <button class="action-btn" onclick="UI.openHabilModal('${h.id}')" title="Modifier">✏</button>
@@ -247,7 +248,7 @@ const Renderer = {
         <td class="muted">${Utils.esc(h.role) || '—'}</td>
         <td class="muted">${Utils.fmtDate(h.dateProchRevision)}</td>
         <td>${ds}</td>
-        <td class="muted">${Utils.esc(h.valideur) || '—'}</td>
+        <td class="muted">${Utils.valideurLink(h.valideur)}</td>
         <td><div class="row-actions" style="opacity:1">
           <button class="btn btn-success btn-sm" onclick="UI.validateRevision('${h.id}')">✔ Valider</button>
           <button class="btn btn-ghost btn-sm" onclick="UI.openHabilModal('${h.id}')">✏</button>
@@ -304,12 +305,24 @@ const Renderer = {
           <input type="text" value="${Utils.esc(l.nom)}" onchange="UI.updateLogicielName('${l.id}', this.value)">
           <button class="btn btn-danger btn-sm" onclick="UI.deleteLogiciel('${l.id}')">🗑</button>
         </div>
+
+        <div class="logiciel-section-label">Valideurs par défaut</div>
         <div class="logiciel-editor-valideurs" id="valideurs_${l.id}">
           ${(l.valideurs || []).map(v => `<span class="valideur-chip">${Utils.esc(v)}<button onclick="UI.removeValideur('${l.id}','${Utils.esc(v)}')">✕</button></span>`).join('')}
         </div>
-        <div class="add-valideur-row">
-          <input type="text" placeholder="Ajouter valideur" id="newValideur_${l.id}">
+        <div class="add-valideur-row" style="position:relative;">
+          <input type="text" placeholder="Taper pour rechercher un agent..." id="newValideur_${l.id}" oninput="UI.onValideurLogicielInput('${l.id}')" autocomplete="off">
           <button class="btn btn-primary btn-sm" onclick="UI.addValideur('${l.id}')">＋</button>
+          <div id="valideurSuggest_${l.id}" class="valideur-autocomplete-suggestions"></div>
+        </div>
+
+        <div class="logiciel-section-label">Groupes de sécurité par défaut</div>
+        <div class="logiciel-editor-groupes" id="groupes_${l.id}">
+          ${(l.groupes || []).map(g => `<span class="groupe-chip">${Utils.esc(g)}<button onclick="UI.removeGroupeLogiciel('${l.id}','${Utils.esc(g)}')">✕</button></span>`).join('')}
+        </div>
+        <div class="add-groupe-row">
+          <input type="text" placeholder="Ajouter groupe (ex: GRP_APP_LECTURE)" id="newGroupe_${l.id}">
+          <button class="btn btn-primary btn-sm" onclick="UI.addGroupeLogiciel('${l.id}')">＋</button>
         </div>
       </div>
     `).join('');
