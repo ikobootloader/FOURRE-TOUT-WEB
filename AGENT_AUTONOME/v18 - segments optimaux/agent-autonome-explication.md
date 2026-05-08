@@ -4,6 +4,8 @@
 
 Ce code implémente une simulation d'un agent autonome explorant un environnement en grille 2D. L'environnement contient des obstacles et des récompenses, et l'agent doit naviguer efficacement pour collecter des récompenses tout en évitant les obstacles. L'agent utilise une approche heuristique basée sur la propagation de valeurs pour prendre ses décisions de mouvement.
 
+L'algorithme de recherche de chemin adaptatif est fondé sur une carte de potentiels dynamiques, où les récompenses découvertes génèrent un champ d’attraction décroissant, tandis que l’agent arbitre entre exploration, exploitation et survie énergétique.
+
 ## Composants clés
 
 ### 1. Environnement
