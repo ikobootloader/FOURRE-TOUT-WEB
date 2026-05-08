@@ -6,6 +6,8 @@ Ce code implémente une simulation d'un agent autonome explorant un environnemen
 
 L'algorithme de recherche de chemin adaptatif est fondé sur une carte de potentiels dynamiques, où les récompenses découvertes génèrent un champ d’attraction décroissant, tandis que l’agent arbitre entre exploration, exploitation et survie énergétique.
 
+Ue méthode de navigation autonome en environnement partiellement observable, capable de combiner exploration opportuniste, exploitation des récompenses connues et survie énergétique.
+
 ## Composants clés
 
 ### 1. Environnement
