@@ -1306,6 +1306,13 @@
                   <button id="btn-reset-test-data" class="px-3 py-2 rounded-lg border border-red-300 bg-red-50 text-red-700 text-sm font-semibold">Réinitialiser les données locales</button>
                   <p id="global-settings-local-reset-info" class="mt-2 text-[11px] text-slate-500">Dernière réinitialisation locale: aucune</p>
                 </div>
+                <div class="mt-4 pt-3 border-t border-slate-200">
+                  <p class="text-xs text-slate-500 mb-2">Rattacher manuellement un projet partagé existant (projectId + passphrase) pour importer la clé locale.</p>
+                  <button id="btn-open-attach-shared-project-modal" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[16px]">key</span>
+                    <span>Rattacher un projet partagé</span>
+                  </button>
+                </div>
               </div>
               <div class="global-settings-card-annuaire rounded-xl border border-slate-200 bg-slate-50 p-4 hidden">
                 <h4 id="annuaire-panel-title" class="font-bold text-slate-800 mb-2">Annuaire établissements (lecture seule)</h4>
@@ -2271,19 +2278,20 @@
           </div>
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Mode du projet</label>
+          <label class="block text-sm font-semibold mb-2">Mode de collaboration (partage inter-utilisateurs)</label>
           <select id="project-sharing-mode-select" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
             <option value="private">Privé (solo)</option>
             <option value="shared">Collaboratif E2E (partagé)</option>
           </select>
-          <p class="text-[11px] text-slate-500 mt-1">Choisissez ici si le projet est individuel ou collaboratif.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Active ou non la synchronisation collaborative chiffrée entre utilisateurs.</p>
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Visibilité lecture</label>
+          <label class="block text-sm font-semibold mb-2">Visibilité lecture (règle d'accès)</label>
           <select id="project-read-access" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
             <option value="private">Privé (membres uniquement)</option>
             <option value="public">Public (lecture pour tous)</option>
           </select>
+          <p class="text-[11px] text-slate-500 mt-1">Cette option ne remplace pas le mode collaboratif: elle définit uniquement qui peut lire un projet déjà collaboratif.</p>
         </div>
         <div>
           <label class="block text-sm font-semibold mb-2">Thématiques initiales (optionnel)</label>
@@ -3536,19 +3544,12 @@
           </div>
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Visibilité lecture</label>
-          <select id="edit-project-read-access" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-            <option value="private">Privé (membres uniquement)</option>
-            <option value="public">Public (lecture pour tous)</option>
-          </select>
-        </div>
-        <div>
           <label class="block text-sm font-semibold mb-2">Associer des groupes globaux</label>
           <select id="edit-project-group-presets" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[96px]"></select>
           <p class="text-[11px] text-slate-500 mt-1">Les groupes sélectionnés seront ajoutés au projet (sans supprimer les groupes existants).</p>
         </div>
         <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <label class="block text-sm font-semibold mb-2">Mode de collaboration</label>
+          <label class="block text-sm font-semibold mb-2">Mode de collaboration (partage inter-utilisateurs)</label>
           <div class="flex flex-wrap items-center gap-3">
             <select id="edit-project-sharing-mode-select" class="w-full sm:w-auto min-w-[260px] px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
               <option value="private">Projet privé (solo)</option>
@@ -3557,8 +3558,17 @@
             <span id="project-edit-mode-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Projet privé</span>
           </div>
           <div id="edit-project-passphrase-section" class="hidden mt-3">
-            <label class="block text-sm font-semibold mb-2">Phrase secrète (optionnelle)</label>
-            <input id="edit-project-passphrase" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Utilisée seulement si vous passez en collaboratif">
+            <label id="edit-project-passphrase-label" class="block text-sm font-semibold mb-2">Phrase secrète</label>
+            <input id="edit-project-passphrase" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Saisir la passphrase du projet collaboratif">
+            <p id="edit-project-passphrase-help" class="text-[11px] text-slate-500 mt-1">Requise au premier passage en collaboratif. Optionnelle si la clé locale du projet existe déjà.</p>
+          </div>
+          <div class="mt-3">
+            <label class="block text-sm font-semibold mb-2">Visibilité lecture (règle d'accès)</label>
+            <select id="edit-project-read-access" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+              <option value="private">Privé (membres uniquement)</option>
+              <option value="public">Public (lecture pour tous)</option>
+            </select>
+            <p class="text-[11px] text-slate-500 mt-1">Cette option ne remplace pas le mode collaboratif: elle définit uniquement qui peut lire un projet déjà collaboratif.</p>
           </div>
           <p class="text-[11px] text-slate-500 mt-2">Vous pouvez passer un projet existant de privé à collaboratif sans le recréer.</p>
         </div>
@@ -3571,6 +3581,37 @@
         <button id="btn-save-edit-project" type="button" class="task-action-btn px-4 py-3 font-semibold inline-flex items-center justify-center gap-2" data-action-kind="save" data-action-label="Enregistrer" aria-label="Enregistrer">
           <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">save</span>
           <span class="taskmda-action-label">Enregistrer</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-attach-shared-project" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-xl w-full mx-auto max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <h3 class="section-title text-xl font-extrabold">Rattacher un projet partagé</h3>
+        <button id="btn-close-attach-shared-project-modal" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
+      </div>
+      <p class="text-sm text-slate-600 mb-4">Saisissez le <code>projectId</code> et la passphrase du projet pour importer la clé localement, puis charger ses événements collaboratifs.</p>
+      <div class="space-y-3">
+        <div>
+          <label for="attach-shared-project-id" class="block text-sm font-semibold mb-1">Project ID</label>
+          <input id="attach-shared-project-id" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Ex: project-1777392038054">
+        </div>
+        <div>
+          <label for="attach-shared-project-passphrase" class="block text-sm font-semibold mb-1">Passphrase</label>
+          <input id="attach-shared-project-passphrase" type="password" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Passphrase du projet partagé">
+        </div>
+        <p id="attach-shared-project-error" class="hidden text-sm font-semibold text-red-700"></p>
+      </div>
+      <div class="mt-4 flex items-center justify-end gap-2">
+        <button id="btn-cancel-attach-shared-project-modal" type="button" class="task-action-btn task-action-btn-subtle px-3 py-2 text-sm font-semibold" data-action-kind="close" data-action-label="Annuler">Annuler</button>
+        <button id="btn-attach-shared-project-confirm" type="button" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center gap-2">
+          <span class="material-symbols-outlined text-[16px]">key</span>
+          <span>Rattacher</span>
         </button>
       </div>
     </div>

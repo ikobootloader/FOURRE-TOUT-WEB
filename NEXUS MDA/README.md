@@ -41,6 +41,7 @@
 
 - Navigateur moderne : **Google Chrome** ou **Microsoft Edge** (recommandé)
 - Espace de stockage local disponible (IndexedDB)
+- Les dépendances frontend sont embarquées localement dans `vendor/` (pas de serveur applicatif, pas de npm)
 - *(Optionnel)* Dossier partagé réseau pour collaboration
 
 ### Installation
@@ -151,6 +152,7 @@ L'application est structurée en modules spécialisés :
 
 #### Modules métier
 - `taskmda-project.js` - Domaine projets
+- `taskmda-project-members-domain.js` - Domaine membres projet et RBAC projet
 - `taskmda-task-lifecycle-domain.js` - Cycle de vie des tâches
 - `taskmda-workflow.js` - Orchestration workflow
 - `taskmda-global.js` - Domaines transverses (notes, docs, feed)
@@ -162,6 +164,11 @@ L'application est structurée en modules spécialisés :
 - `taskmda-calendar.js` - Calendrier transverse
 - `taskmda-recurrence.js` - Tâches récurrentes
 - `taskmda-notifications.js` - Centre de notifications
+- `taskmda-tasks.js` - Rendus et interactions de tâches
+- `taskmda-social.js` - UI sociale (feed/messages)
+- `taskmda-comms-ui.js` - UI communication transverse
+- `taskmda-admin-ui.js` - UI administration et habilitations
+- `taskmda-notes-shared.js` - Composants de notes partagées
 - `taskmda-via-annuaire.js` - Annuaire ESMS
 - `taskmda-email-generator.js` - Générateur emails
 - `taskmda-file-watcher.js` - Surveillance fichiers
@@ -172,9 +179,11 @@ L'application est structurée en modules spécialisés :
 - `taskmda-runtime-contract.js` - Contrat d'orchestration
 - `taskmda-shell.js` - Shell transverse
 - `taskmda-app-init.js` - Initialisation
+- `taskmda-read-modal-zoom.js` - Accessibilité zoom de lecture
 - `taskmda-ui.js` - Composants UI
 - `taskmda-theme.js` - Gestion des thèmes
 - `taskmda-editor.js` - Éditeur Quill
+- `taskmda-team.js` - Orchestrateur principal
 
 ### Base de données
 
@@ -214,7 +223,6 @@ projects/
   <projectId>/
     events/
       <timestamp>.json
-    shared-key.json
 ```
 
 #### Sécurité
@@ -223,6 +231,11 @@ projects/
 - Double chiffrement : local + transport
 - Format `v1-e2e-encrypted`
 - Rétrocompatibilité JSON clair
+- Aucune clé partagée persistée en clair dans le dossier partagé
+- Écriture partagée refusée si la clé partagée est indisponible (pas de fallback JSON en clair)
+- Détection automatique des anciens fichiers `shared-key.json` avec alerte explicite, sans import de clé en clair
+- Action utilisateur disponible dans les notifications: `Marquer comme traité` pour mémoriser localement les projets legacy déjà audités
+- UI dédiée de rattachement manuel d'un projet partagé (`projectId` + passphrase) pour importer la clé locale sans clé en clair sur disque
 
 ---
 

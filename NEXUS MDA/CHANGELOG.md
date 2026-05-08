@@ -1,5 +1,39 @@
 # Changelog - TaskMDA Team
 
+## Mise a jour incrementale - Mai 2026 (Durcissement securite chiffrement partage)
+
+- Securite:
+  - suppression de la persistance de cle partagee en clair dans le dossier partage (`shared-key.json` n est plus ecrit ni importe).
+  - suppression du fallback d ecriture d evenements en JSON clair quand la cle partagee est indisponible.
+  - ecriture partagee strictement chiffree: si la cle partagee manque, l ecriture est refusee.
+  - activation du mode partage durcie: passphrase requise lorsqu aucune cle partagee locale n existe.
+  - micro-lot migration legacy: detection des fichiers historiques `shared-key.json` dans les projets partages, ignorage volontaire de ces fichiers et alerte UI explicite (toast + notification).
+  - action UI ajoutee dans la notification legacy: bouton `Marquer comme traite` qui enregistre localement les projets deja audites et evite la reaffichage de l alerte a la reconnexion.
+  - correctif runtime: correction d un `ReferenceError` sur `auditedLegacySharedKeys` lors de la connexion dossier partage (scope de variable dans `discoverAndLoadExistingProjects`).
+  - correctif collaboration: lors de la decouverte d un projet avec evenements `v1-e2e-encrypted` sans cle locale, demande de passphrase pour deriver/rattacher la cle partagee localement, puis chargement du projet.
+  - ajout d une UI dediee `Rattacher un projet partage` (projectId + passphrase) dans Referentiels > Identite pour eviter les prompts successifs lors du premier rattachement.
+  - fiabilisation rattachement partage: validation de la passphrase contre les evenements chiffrés avant persistance de la cle locale, et lecture des evenements tolerante fichier par fichier (skip des payloads invalides/incompatibles).
+  - UX rattachement partage: message d erreur inline explicite dans la modale (`Passphrase incorrecte pour ce projectId`) a la place d un toast generique.
+  - clarification UX collaboration: renommage des libelles `Mode de collaboration` / `Visibilite lecture` pour distinguer clairement partage inter-utilisateurs vs regle d acces, et repositionnement visuel de `Visibilite lecture` sous `Mode de collaboration` dans la modale d edition projet.
+  - stabilisation lecture partagee: en cas de mismatch de cle (OperationError/DataError), marquage local du projet en etat `cle invalide`, limitation des warnings console (throttle) et arret des tentatives de lecture `onlyNew` jusqu a nouveau rattachement valide.
+  - correctif UX modale edition projet: la `Phrase secrete` est maintenant pre-remplie avec la valeur deja enregistree (`joinPassphrase`) quand le projet est en mode collaboratif.
+  - hygiene logs console: deduplication session des warnings `legacy shared-key.json` et `project not accessible` (une seule emission par projectId).
+  - robustesse acces projets collaboratifs: si un projet est en lecture privee mais qu une cle partagee locale valide existe deja pour ce `projectId`, le projet reste visible apres reconnexion dossier (evite les disparitions dues aux derives d identite locale).
+  - UX explicite: ajout d un badge `Acces par cle locale` sur les cartes projet (grille + carrousel) quand l acces est accorde via cle partagee locale en contexte collaboratif.
+  - ajustement UX: badge `Acces par cle locale` rendu plus discret (icone cle compacte + infobulle) pour reduire la charge visuelle.
+  - correctif fallback local chiffre: en mode reconstruction collaborative, l etat local `localState` n est plus supprime tant que l historique partage n est pas lisible/complet (presence `CREATE_PROJECT`), avec restauration automatique du snapshot local si la reconstruction produit un etat incomplet.
+  - indicateur UI sync: ajout d une notification explicite `Reconstruction ignoree (historique incomplet)` avec liste des `projectId` concernes, pour diagnostic sans console.
+  - hygiene console complementaire: messages attendus `legacy shared-key` et `project not accessible` passes en `console.info` (toujours deduplices) pour reduire les faux signaux d alerte.
+  - robustesse liaison dossier: gestion explicite du `NotFoundError` si le dossier collaboratif a ete supprime/deplace (toast + notification utilisateur + nettoyage automatique de la liaison sauvegardee, sans boucle silencieuse).
+  - fiabilisation creation collaborative: le bootstrap de copie vers l espace partage est maintenant attendu et verifie (plus de fire-and-forget), avec retour utilisateur explicite en cas de synchro incomplete.
+  - correctif anti-duplication collaborative: ingestion `CREATE_TASK` rendue idempotente par `taskId` (evite la creation de doublons lors de reconnexions/synchronisations).
+  - clarte UX detail projet: affichage explicite `Cree par ...` dans l en-tete projet (en plus des avatars/membres), et enrichissement du `CREATE_PROJECT` avec `createdByName` a la source.
+  - garde-fou diagnostic evenements: trace dedupe `CREATE_TASK` par `eventId` (replay) et `taskId` (doublon logique), avec throttling console pour identifier rapidement une source amont qui reemet des creations.
+  - correctif affichage createur projet: les cartes projet resolvent desormais le nom du createur en priorite depuis `members[].displayName`, puis `createdByName`, puis fallback identifiant (au lieu d afficher trop souvent `Utilisateur <id>`).
+  - retro-correction auto identite createur: quand le createur ouvre un projet et que son nom manque, l application publie un `ADD_MEMBER` de backfill avec `displayName` (sync partagee), et `ADD_MEMBER` devient upsert (mise a jour du nom si le membre existe deja).
+  - UX discrete: micro-notification `Identite createur synchronisee` (dedupee par projet) lors du premier backfill reussi.
+  - robustesse identite createur legacy: backfill autorise via alias d utilisateur (pas seulement userId strict), et mise a jour de `project.createdByName` lors de la reception d un `ADD_MEMBER` correspondant au createur.
+
 ## Mise a jour incrementale - Mai 2026 (Dependances frontend localisees)
 
 - Conformite mode local:

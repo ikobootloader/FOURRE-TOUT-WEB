@@ -933,7 +933,17 @@
 
       // Vérifier si déjà traité (pas besoin de déchiffrer, juste vérifier l'existence)
       const processed = await db.get('processedEvents', event.eventId);
-      if (processed) return;
+      if (processed) {
+        if (event?.type === EventTypes.CREATE_TASK) {
+          const taskId = String(event?.payload?.taskId || '').trim();
+          const eventId = String(event?.eventId || '').trim();
+          if (taskId && eventId && !duplicateCreateEventReplayLogged.has(eventId)) {
+            registerDuplicateTaskCreateDiagnostic(taskId, event, 'duplicate-event-id-replay');
+            duplicateCreateEventReplayLogged.add(eventId);
+          }
+        }
+        return;
+      }
 
       // Appliquer à l'état
       await applyEventToState(event);
@@ -1082,6 +1092,11 @@
             createdBy: event.payload.createdBy || event.author,
             createdAt: event.timestamp
           };
+          const normalizedTaskId = String(createdTask.taskId || '').trim();
+          if (normalizedTaskId && state.tasks.some((task) => String(task?.taskId || '').trim() === normalizedTaskId)) {
+            registerDuplicateTaskCreateDiagnostic(normalizedTaskId, event, 'duplicate-task-id');
+            break;
+          }
           if (normalizeTaskStatusValue(createdTask.status) === 'termine') {
             createdTask.completedAt = Number(createdTask.completedAt || event.timestamp) || event.timestamp;
           } else {
@@ -1167,6 +1182,25 @@
               role: normalizeProjectRole(event.payload.role),
               joinedAt: event.timestamp
             });
+          } else {
+            state.members = state.members.map((member) => {
+              if (member.userId !== event.payload.userId) return member;
+              const merged = {
+                ...member,
+                role: normalizeProjectRole(event.payload.role || member.role)
+              };
+              const nextDisplayName = String(event.payload?.displayName || '').trim();
+              if (nextDisplayName) merged.displayName = nextDisplayName;
+              return merged;
+            });
+          }
+          if (state.project) {
+            const creatorId = String(state.project.createdBy || '').trim();
+            const memberId = String(event.payload?.userId || '').trim();
+            const nextDisplayName = String(event.payload?.displayName || '').trim();
+            if (creatorId && memberId && creatorId === memberId && nextDisplayName) {
+              state.project.createdByName = nextDisplayName;
+            }
           }
           break;
 
@@ -1383,7 +1417,24 @@
         return true;
       }
       if (readAccess === 'public') return true;
+      const projectId = String(state.project.projectId || state.projectId || '').trim();
+      if (projectId && localSharedKeyProjectIds.has(projectId)) return true;
       return false;
+    }
+
+    function isProjectAccessViaLocalSharedKey(state, userId = getCurrentUserId()) {
+      if (!state || !state.project || state.project.deletedAt) return false;
+      const normalizedMode = normalizeSharingMode(state.project.sharingMode, 'private');
+      if (normalizedMode !== 'shared') return false;
+      const readAccess = normalizeProjectReadAccess(state.project.readAccess, 'members');
+      if (readAccess === 'public') return false;
+      const members = Array.isArray(state.members) ? state.members : [];
+      const aliasIds = getCurrentUserIdAliases(userId);
+      const isMember = members.some((m) => aliasIds.has(String(m?.userId || '').trim()));
+      if (isMember) return false;
+      if (state.project.createdBy && aliasIds.has(String(state.project.createdBy || '').trim())) return false;
+      const projectId = String(state.project.projectId || state.projectId || '').trim();
+      return Boolean(projectId && localSharedKeyProjectIds.has(projectId));
     }
 
     async function getProjectState(projectId, options = {}) {
@@ -1902,9 +1953,38 @@
     let sharedWriteQueue = [];
     let sharedWriteQueuedIds = new Set();
     let isSharedWriteProcessing = false;
+    const sharedProjectKeyHealth = new Map();
+    const loggedLegacySharedKeyProjectIds = new Set();
+    const loggedInaccessibleSharedProjectIds = new Set();
+    const localSharedKeyProjectIds = new Set();
+    const duplicateTaskCreateDiagnostics = new Map();
+    const duplicateCreateEventReplayLogged = new Set();
+    const creatorIdentityBackfillProjects = new Set();
 
     function isFileSystemSupported() {
       return 'showDirectoryPicker' in window;
+    }
+
+    function registerDuplicateTaskCreateDiagnostic(taskId, event, reason = 'duplicate-task-id') {
+      const normalizedTaskId = String(taskId || '').trim();
+      const normalizedEventId = String(event?.eventId || '').trim();
+      if (!normalizedTaskId) return;
+      const key = `${normalizedTaskId}:${reason}`;
+      const now = Date.now();
+      const marker = duplicateTaskCreateDiagnostics.get(key) || { count: 0, warnedAt: 0 };
+      marker.count += 1;
+      if ((now - Number(marker.warnedAt || 0)) > 120000) {
+        console.warn('[TaskMDA][Diag] Duplicate CREATE_TASK ignored', {
+          reason,
+          projectId: String(event?.projectId || '').trim(),
+          taskId: normalizedTaskId,
+          eventId: normalizedEventId || null,
+          author: String(event?.author || '').trim() || null,
+          count: marker.count
+        });
+        marker.warnedAt = now;
+      }
+      duplicateTaskCreateDiagnostics.set(key, marker);
     }
 
     async function selectSharedFolder() {
@@ -1963,6 +2043,7 @@
 
       try {
         const projectsDir = await sharedFolderHandle.getDirectoryHandle('projects', { create: true });
+        const auditedLegacySharedKeys = loadLegacySharedKeyAuditedProjects();
         const projectDir = await projectsDir.getDirectoryHandle(projectId, { create: true });
         const eventsDir = await projectDir.getDirectoryHandle('events', { create: true });
         const snapshotsDir = await projectDir.getDirectoryHandle('snapshots', { create: true });
@@ -1975,53 +2056,197 @@
     }
 
     async function writeProjectSharedKeyToFolder(projectId, sharedKeyHex) {
-      const key = String(sharedKeyHex || '').trim();
-      if (!projectId || !key) return;
-      const folders = projectFolders.get(projectId);
-      if (!folders?.projectDir) return;
-      try {
-        const keyFile = await folders.projectDir.getFileHandle('shared-key.json', { create: true });
-        const writable = await keyFile.createWritable();
-        const payload = {
-          type: 'taskmda_shared_key',
-          version: 1,
-          projectId,
-          sharedKey: key,
-          updatedAt: Date.now(),
-          updatedBy: currentUser?.userId || ''
-        };
-        await writable.write(JSON.stringify(payload, null, 2));
-        await writable.close();
-      } catch (error) {
-        console.warn('Unable to persist project shared key in folder:', error);
-      }
+      // Mesure de sécurité: ne jamais persister une clé partagée en clair sur disque.
+      // Cette fonction est conservée pour compatibilité d'appel, mais n'écrit plus de clé.
+      return false;
     }
 
     async function importProjectSharedKeyFromFolder(projectId) {
-      if (!projectId) return null;
+      // Mesure de sécurité: ne jamais importer de clé partagée en clair depuis le dossier.
+      return null;
+    }
+
+    async function detectLegacySharedKeyFile(projectId) {
+      if (!projectId) return false;
       const folders = projectFolders.get(projectId);
-      if (!folders?.projectDir) return null;
+      if (!folders?.projectDir) return false;
       try {
-        const keyFile = await folders.projectDir.getFileHandle('shared-key.json', { create: false });
-        const file = await keyFile.getFile();
-        const content = await file.text();
-        const parsed = JSON.parse(content || '{}');
-        const sharedKey = String(parsed?.sharedKey || '').trim();
-        if (!sharedKey) return null;
-        const row = {
-          projectId,
-          sharedKey,
-          passphrase: null,
-          createdAt: Number(parsed?.updatedAt || Date.now()) || Date.now()
-        };
-        await putEncrypted('sharedKeys', row, 'projectId');
-        return row;
+        await folders.projectDir.getFileHandle('shared-key.json', { create: false });
+        return true;
       } catch (error) {
-        if (error?.name !== 'NotFoundError') {
-          console.warn('Unable to import project shared key from folder:', error);
-        }
-        return null;
+        if (error?.name === 'NotFoundError') return false;
+        console.warn('Unable to check legacy shared key file:', error);
+        return false;
       }
+    }
+
+    async function refreshLocalSharedKeyProjectIds() {
+      try {
+        const rows = await getAllDecrypted('sharedKeys', 'projectId');
+        localSharedKeyProjectIds.clear();
+        for (const row of rows || []) {
+          const projectId = String(row?.projectId || '').trim();
+          const sharedKey = String(row?.sharedKey || '').trim();
+          if (projectId && sharedKey) {
+            localSharedKeyProjectIds.add(projectId);
+          }
+        }
+      } catch (error) {
+        console.warn('Unable to refresh local shared key cache:', error);
+      }
+    }
+
+    async function hasEncryptedSharedEvents(projectId) {
+      if (!projectId) return false;
+      const folders = projectFolders.get(projectId);
+      if (!folders?.eventsDir) return false;
+      try {
+        for await (const entry of folders.eventsDir.values()) {
+          if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+          try {
+            const file = await entry.getFile();
+            const content = await file.text();
+            const wrapper = JSON.parse(content || '{}');
+            if (wrapper?.version === 'v1-e2e-encrypted' && typeof wrapper?.encrypted === 'string') {
+              return true;
+            }
+          } catch (_) {
+            // ignorer fichiers invalides
+          }
+        }
+      } catch (error) {
+        console.warn('Unable to inspect shared events encryption format:', error);
+      }
+      return false;
+    }
+
+    async function validateSharedKeyAgainstProjectEvents(projectId, sharedKey) {
+      if (!projectId || !sharedKey) return { validated: false, tested: false };
+      const folders = projectFolders.get(projectId);
+      if (!folders?.eventsDir) return { validated: false, tested: false };
+      try {
+        for await (const entry of folders.eventsDir.values()) {
+          if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+          try {
+            const file = await entry.getFile();
+            const content = await file.text();
+            const wrapper = JSON.parse(content || '{}');
+            if (!(wrapper?.version === 'v1-e2e-encrypted' && typeof wrapper?.encrypted === 'string')) continue;
+            await window.TaskMDACrypto.decryptWithSharedKey(wrapper.encrypted, sharedKey);
+            return { validated: true, tested: true };
+          } catch (error) {
+            if (error?.name === 'OperationError' || error?.name === 'DataError') {
+              return { validated: false, tested: true };
+            }
+            // fichier invalide: continuer
+          }
+        }
+      } catch (error) {
+        console.warn('Unable to validate shared key against project events:', error);
+      }
+      return { validated: true, tested: false };
+    }
+
+    async function attachSharedProjectKeyFromPassphrase(projectId, passphrase, options = {}) {
+      const normalizedProjectId = String(projectId || '').trim();
+      const normalizedPassphrase = String(passphrase || '').trim();
+      if (!normalizedProjectId) {
+        throw new Error('Project ID requis');
+      }
+      if (!normalizedPassphrase) {
+        throw new Error('Passphrase requise');
+      }
+      if (!window.TaskMDACrypto) {
+        throw new Error('Module crypto indisponible');
+      }
+
+      const derivedKey = await window.TaskMDACrypto.deriveSharedKeyFromPassphrase(normalizedPassphrase, normalizedProjectId);
+      if (sharedFolderHandle) {
+        await registerProject(normalizedProjectId);
+        const keyValidation = await validateSharedKeyAgainstProjectEvents(normalizedProjectId, derivedKey);
+        if (keyValidation.tested && !keyValidation.validated) {
+          throw new Error('Passphrase invalide pour ce projet partagé');
+        }
+      }
+      const sharedKeyHex = await window.TaskMDACrypto.exportSharedKey(derivedKey);
+      await putEncrypted('sharedKeys', {
+        projectId: normalizedProjectId,
+        sharedKey: sharedKeyHex,
+        passphrase: normalizedPassphrase,
+        createdAt: Date.now()
+      }, 'projectId');
+      localSharedKeyProjectIds.add(normalizedProjectId);
+      sharedProjectKeyHealth.delete(normalizedProjectId);
+
+      let eventsLoaded = 0;
+      if (sharedFolderHandle) {
+        await registerProject(normalizedProjectId);
+        const events = await readEventsFromSharedFolder(normalizedProjectId, false);
+        eventsLoaded = events.length;
+        for (const event of events) {
+          await processEvent(event);
+          knownEventIds.add(event.eventId);
+        }
+        await refreshStats();
+        await renderProjects();
+      }
+
+      if (!options.silent) {
+        showToast(eventsLoaded > 0
+          ? `Projet rattache: ${eventsLoaded} evenement(s) charge(s)`
+          : 'Cle rattachee localement. Aucun evenement charge pour le moment');
+      }
+      return { projectId: normalizedProjectId, eventsLoaded };
+    }
+
+    async function tryAttachSharedProjectKeyFromPassphrase(projectId) {
+      const normalizedProjectId = String(projectId || '').trim();
+      if (!normalizedProjectId || !window.TaskMDACrypto) return false;
+      const message = `Projet collaboratif detecte (${normalizedProjectId}).\nSaisissez la passphrase pour importer la cle partagee localement.`;
+      const passphrase = String(window.prompt(message) || '').trim();
+      if (!passphrase) return false;
+      try {
+        await attachSharedProjectKeyFromPassphrase(normalizedProjectId, passphrase, { silent: true });
+        showToast('Cle partagee importee localement pour le projet collaboratif');
+        return true;
+      } catch (error) {
+        console.warn('Unable to derive shared key from passphrase:', error);
+        showToast('Passphrase invalide ou incompatible pour ce projet');
+        return false;
+      }
+    }
+
+    const LEGACY_SHARED_KEY_AUDIT_STORAGE_KEY = 'taskmda_legacy_shared_key_audited_projects_v1';
+
+    function loadLegacySharedKeyAuditedProjects() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(LEGACY_SHARED_KEY_AUDIT_STORAGE_KEY) || '[]');
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.map((id) => String(id || '').trim()).filter(Boolean));
+      } catch (_) {
+        return new Set();
+      }
+    }
+
+    function saveLegacySharedKeyAuditedProjects(ids) {
+      const values = Array.from(ids || [])
+        .map((id) => String(id || '').trim())
+        .filter(Boolean);
+      localStorage.setItem(LEGACY_SHARED_KEY_AUDIT_STORAGE_KEY, JSON.stringify(values));
+    }
+
+    function markLegacySharedKeyProjectsAsAudited(projectIds = []) {
+      const audited = loadLegacySharedKeyAuditedProjects();
+      const ids = Array.isArray(projectIds) ? projectIds : [];
+      let added = 0;
+      ids.forEach((id) => {
+        const normalized = String(id || '').trim();
+        if (!normalized || audited.has(normalized)) return;
+        audited.add(normalized);
+        added += 1;
+      });
+      saveLegacySharedKeyAuditedProjects(audited);
+      return added;
     }
 
     /**
@@ -2033,7 +2258,10 @@
         projectsFound: 0,
         projectsLoaded: 0,
         projectsSkippedMissingKey: 0,
-        eventsLoaded: 0
+        eventsLoaded: 0,
+        legacySharedKeyFilesDetected: 0,
+        legacySharedKeyProjectIds: [],
+        rebuildSkippedProjects: []
       };
       if (!sharedFolderHandle) return stats;
       const shouldRebuildLocal = options.rebuildLocal === true;
@@ -2104,7 +2332,9 @@
         projectsFound: 0,
         projectsLoaded: 0,
         projectsSkippedMissingKey: 0,
-        eventsLoaded: 0
+        eventsLoaded: 0,
+        legacySharedKeyFilesDetected: 0,
+        legacySharedKeyProjectIds: []
       };
       if (!sharedFolderHandle) return stats;
       const shouldRebuildLocal = options.rebuildLocal === true;
@@ -2113,6 +2343,7 @@
 
       try {
         const projectsDir = await sharedFolderHandle.getDirectoryHandle('projects', { create: true });
+        const auditedLegacySharedKeys = loadLegacySharedKeyAuditedProjects();
 
         for await (const entry of projectsDir.values()) {
           if (entry.kind !== 'directory') continue;
@@ -2121,13 +2352,24 @@
           const projectId = entry.name;
           debugLog('Found project:', projectId);
           await registerProject(projectId);
-
-          let sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
-          if (!sharedKeyData) {
-            sharedKeyData = await importProjectSharedKeyFromFolder(projectId);
+          if (await detectLegacySharedKeyFile(projectId)) {
+            if (!auditedLegacySharedKeys.has(projectId)) {
+              stats.legacySharedKeyFilesDetected += 1;
+              stats.legacySharedKeyProjectIds.push(projectId);
+            }
+            if (!loggedLegacySharedKeyProjectIds.has(projectId)) {
+              console.info('Legacy shared-key.json detected and ignored for security:', projectId);
+              loggedLegacySharedKeyProjectIds.add(projectId);
+            }
           }
-          if (sharedKeyData?.sharedKey) {
-            await writeProjectSharedKeyToFolder(projectId, sharedKeyData.sharedKey);
+
+          const sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
+          const hasEncryptedEvents = await hasEncryptedSharedEvents(projectId);
+          if (!sharedKeyData?.sharedKey && hasEncryptedEvents) {
+            const attached = await tryAttachSharedProjectKeyFromPassphrase(projectId);
+            if (attached) {
+              showToast(`Projet ${projectId}: cle partagee rattachee, chargement en cours`);
+            }
           }
 
           const events = await readEventsFromSharedFolder(projectId, false);
@@ -2140,12 +2382,28 @@
           }
 
           if (shouldRebuildLocal) {
-            const db = getDatabase();
-            await deleteFromStore('localState', projectId);
-            for (const event of events) {
-              await applyEventToState(event);
-              await maybeNotifyCollaboratorEvent(event);
-              knownEventIds.add(event.eventId);
+            const existingStateBeforeRebuild = await getDecrypted('localState', projectId, 'projectId');
+            const hasCreateProjectEvent = events.some((event) => event?.type === EventTypes.CREATE_PROJECT);
+            if (events.length > 0 && hasCreateProjectEvent) {
+              await deleteFromStore('localState', projectId);
+              for (const event of events) {
+                await applyEventToState(event);
+                await maybeNotifyCollaboratorEvent(event);
+                knownEventIds.add(event.eventId);
+              }
+              const rebuiltState = await getProjectState(projectId, { ignoreAccessCheck: true });
+              if (!rebuiltState?.project && existingStateBeforeRebuild?.project) {
+                await putEncrypted('localState', existingStateBeforeRebuild, 'projectId');
+                console.warn('Rebuild produced incomplete state, local snapshot restored:', projectId);
+              }
+            } else {
+              if (events.length > 0 && !hasCreateProjectEvent) {
+                console.warn('Rebuild skipped: missing CREATE_PROJECT event in shared history:', projectId);
+                stats.rebuildSkippedProjects.push({ projectId, reason: 'missing-create-project' });
+              } else {
+                console.warn('Rebuild skipped for project without readable shared events:', projectId);
+                stats.rebuildSkippedProjects.push({ projectId, reason: 'unreadable-shared-events' });
+              }
             }
           } else {
             for (const event of events) {
@@ -2156,12 +2414,18 @@
 
           const refreshedState = await getProjectState(projectId, { ignoreAccessCheck: true });
           if (refreshedState && !hasProjectAccess(refreshedState)) {
-            console.warn('Project loaded from shared folder is currently not accessible for this user, keeping local state:', projectId);
+            if (!loggedInaccessibleSharedProjectIds.has(projectId)) {
+              console.info('Project loaded from shared folder is currently not accessible for this user, keeping local state:', projectId);
+              loggedInaccessibleSharedProjectIds.add(projectId);
+            }
           }
         }
 
         debugLog('All existing projects loaded');
       } catch (error) {
+        if (error?.name === 'NotFoundError') {
+          throw error;
+        }
         console.error('Error discovering projects:', error);
       }
       return stats;
@@ -2186,42 +2450,90 @@
 
     async function connectSharedFolderHandle(handle, showNotice = true, options = {}) {
       if (!handle) return false;
-      sharedFolderHandle = handle;
-      projectFolders = new Map();
-      knownEventIds = new Set();
-      sharedWriteQueue = [];
-      sharedWriteQueuedIds = new Set();
-      isSharedWriteProcessing = false;
-      updateBackgroundSyncStatus('idle', 0);
-      await loadAppBrandingConfig({ ensureRemote: true });
-      const loadStats = await discoverAndLoadExistingProjects(options);
-      await syncGlobalMessagesFromSharedFolder();
-      await syncGlobalFeedFromSharedFolder();
-      await syncWorkflowFromSharedFolder();
-      if (!isPolling) startPolling();
-      updateSyncStatus('connected');
-      await refreshStats();
-      await renderProjects();
-      ensureAutoEncryptedUserBackupToSharedFolder({ force: true, silent: true });
-      if (showNotice) {
-        if ((loadStats?.projectsFound || 0) === 0) {
-          showToast('Dossier connecté, aucun projet collaboratif détecté');
-        } else {
-          const loaded = Number(loadStats?.projectsLoaded || 0);
-          const skipped = Number(loadStats?.projectsSkippedMissingKey || 0);
-          showToast(`Dossier connecté: ${loaded} projet(s) chargé(s), ${skipped} ignoré(s)`);
-          if (skipped > 0) {
-            addNotification(
-              'Synchronisation',
-              'Certains projets n ont pas pu etre lus (cle partagee manquante)',
-              null,
-              { targetView: 'settings' }
-            );
+      try {
+        sharedFolderHandle = handle;
+        projectFolders = new Map();
+        knownEventIds = new Set();
+        sharedWriteQueue = [];
+        sharedWriteQueuedIds = new Set();
+        isSharedWriteProcessing = false;
+        updateBackgroundSyncStatus('idle', 0);
+        await refreshLocalSharedKeyProjectIds();
+        await loadAppBrandingConfig({ ensureRemote: true });
+        const loadStats = await discoverAndLoadExistingProjects(options);
+        await syncGlobalMessagesFromSharedFolder();
+        await syncGlobalFeedFromSharedFolder();
+        await syncWorkflowFromSharedFolder();
+        if (!isPolling) startPolling();
+        updateSyncStatus('connected');
+        await refreshStats();
+        await renderProjects();
+        ensureAutoEncryptedUserBackupToSharedFolder({ force: true, silent: true });
+        if (showNotice) {
+          if ((loadStats?.projectsFound || 0) === 0) {
+            showToast('Dossier connecté, aucun projet collaboratif détecté');
+          } else {
+            const loaded = Number(loadStats?.projectsLoaded || 0);
+            const skipped = Number(loadStats?.projectsSkippedMissingKey || 0);
+            showToast(`Dossier connecté: ${loaded} projet(s) chargé(s), ${skipped} ignoré(s)`);
+            if (skipped > 0) {
+              addNotification(
+                'Synchronisation',
+                'Certains projets n ont pas pu etre lus (cle partagee manquante)',
+                null,
+                { targetView: 'settings' }
+              );
+            }
+            const legacyKeyFiles = Number(loadStats?.legacySharedKeyFilesDetected || 0);
+            if (legacyKeyFiles > 0) {
+              showToast(`Alerte securite: ${legacyKeyFiles} fichier(s) shared-key.json historique(s) detecte(s)`);
+              addNotification(
+                'Securite',
+                'Des fichiers shared-key.json historiques ont ete detectes puis ignores. Supprimez-les du dossier partage apres verification de vos projets.',
+                null,
+                {
+                  targetView: 'settings',
+                  actionType: 'mark-legacy-shared-key-treated',
+                  actionLabel: 'Marquer comme traite',
+                  actionPayload: { projectIds: loadStats?.legacySharedKeyProjectIds || [] },
+                  dedupeKey: `legacy-shared-key-alert:${(loadStats?.legacySharedKeyProjectIds || []).slice().sort().join('|')}`
+                }
+              );
+            }
+            const rebuildSkippedCount = Number(loadStats?.rebuildSkippedProjects?.length || 0);
+            if (rebuildSkippedCount > 0) {
+              const ids = (loadStats.rebuildSkippedProjects || [])
+                .map((row) => String(row?.projectId || '').trim())
+                .filter(Boolean);
+              const joinedIds = ids.slice(0, 4).join(', ');
+              const suffix = ids.length > 4 ? ' ...' : '';
+              addNotification(
+                'Synchronisation',
+                `Reconstruction ignoree (historique incomplet) pour ${rebuildSkippedCount} projet(s): ${joinedIds}${suffix}`,
+                null,
+                { targetView: 'settings' }
+              );
+            }
           }
+          addNotification('Connexion', 'Dossier partage connecte', null);
         }
-        addNotification('Connexion', 'Dossier partage connecte', null);
+        return true;
+      } catch (error) {
+        if (error?.name === 'NotFoundError') {
+          console.warn('Shared folder is no longer available, unlinking saved handle:', error);
+          await clearSavedSharedFolderHandle();
+          await disconnectSharedFolder(false);
+          showToast('Le dossier collaboratif a ete supprime ou deplace. Liaison retiree.');
+          addNotification(
+            'Connexion',
+            'Le dossier collaboratif n existe plus. Veuillez selectionner un nouveau dossier.',
+            null,
+            { targetView: 'settings' }
+          );
+          return false;
+        }
+        throw error;
       }
-      return true;
     }
 
     function askCollaborativeReload(sourceLabel = 'liaison') {
@@ -4172,24 +4484,11 @@
       if (!folders) return false;
       try {
         // Récupérer la clé partagée du projet
-        let sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
-        if (!sharedKeyData?.sharedKey) {
-          sharedKeyData = await importProjectSharedKeyFromFolder(projectId);
-        }
+        const sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
 
         if (!sharedKeyData?.sharedKey) {
-          const fileName = `${event.timestamp}_${event.eventId}.json`;
-          const fileHandle = await folders.eventsDir.getFileHandle(fileName, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(JSON.stringify({
-            ...event,
-            version: 'v1-clear-fallback'
-          }));
-          await writable.close();
-          knownEventIds.add(event.eventId);
-          console.warn('Shared key unavailable, writing clear fallback event:', projectId, event?.type);
-          debugLog('Fallback event written to shared folder:', fileName);
-          return true;
+          console.warn('Shared key unavailable, encrypted write refused:', projectId, event?.type);
+          return false;
         }
 
         const sharedKey = await window.TaskMDACrypto.importSharedKey(sharedKeyData.sharedKey);
@@ -4272,22 +4571,44 @@
     }
 
     async function syncProjectBootstrapToSharedSpace(projectId, sharedKeyHex, events = []) {
-      if (!sharedFolderHandle || !projectId) return;
+      if (!sharedFolderHandle || !projectId) {
+        return { total: 0, synced: 0, failed: 0 };
+      }
       try {
         await registerProject(projectId);
-        if (sharedKeyHex) {
-          await writeProjectSharedKeyToFolder(projectId, sharedKeyHex);
+        const existingSharedKey = await getDecrypted('sharedKeys', projectId, 'projectId');
+        if (!existingSharedKey?.sharedKey && String(sharedKeyHex || '').trim()) {
+          await putEncrypted('sharedKeys', {
+            projectId,
+            sharedKey: String(sharedKeyHex || '').trim(),
+            passphrase: null,
+            createdAt: Date.now()
+          }, 'projectId');
+          localSharedKeyProjectIds.add(projectId);
         }
         const queue = Array.isArray(events) ? events.filter((evt) => evt?.eventId) : [];
+        let synced = 0;
+        let failed = 0;
         for (const event of queue) {
-          await writeEventToSharedFolder(projectId, event);
+          const ok = await writeEventToSharedFolderNow(projectId, event);
+          if (ok) {
+            synced += 1;
+          } else {
+            failed += 1;
+          }
         }
         if (!isPolling) {
           startPolling();
         }
+        if (failed > 0) {
+          addNotification('Synchronisation', `Projet cree localement, ${failed} evenement(s) non copies dans l espace collaboratif`, projectId);
+        }
+        return { total: queue.length, synced, failed };
       } catch (error) {
         console.error('Shared bootstrap sync failed:', error);
         addNotification('Synchronisation', 'Projet créé localement, synchronisation collective en attente', projectId);
+        const total = Array.isArray(events) ? events.filter((evt) => evt?.eventId).length : 0;
+        return { total, synced: 0, failed: total };
       }
     }
 
@@ -4318,6 +4639,11 @@
       if (!folders) return [];
 
       const events = [];
+      const normalizedProjectId = String(projectId || '').trim();
+      const health = sharedProjectKeyHealth.get(normalizedProjectId);
+      if (onlyNew && health?.invalid === true) {
+        return [];
+      }
 
       // Récupérer la clé partagée du projet
       const sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
@@ -4328,27 +4654,41 @@
       try {
         for await (const entry of folders.eventsDir.values()) {
           if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+          try {
+            const file = await entry.getFile();
+            const content = await file.text();
+            const wrapper = JSON.parse(content);
 
-          const file = await entry.getFile();
-          const content = await file.text();
-          const wrapper = JSON.parse(content);
+            let event = null;
 
-          let event = null;
+            // Vérifier le format
+            if (wrapper.version === 'v1-e2e-encrypted' && wrapper.encrypted) {
+              // Nouveau format : chiffré E2E
+              if (!sharedKey) continue;
+              event = await window.TaskMDACrypto.decryptWithSharedKey(wrapper.encrypted, sharedKey);
+            } else if (wrapper.eventId && wrapper.type) {
+              // Ancien format : JSON clair (compatibilité)
+              event = wrapper;
+            }
 
-          // Vérifier le format
-          if (wrapper.version === 'v1-e2e-encrypted' && wrapper.encrypted) {
-            // Nouveau format : chiffré E2E
-            if (!sharedKey) continue;
-            event = await window.TaskMDACrypto.decryptWithSharedKey(wrapper.encrypted, sharedKey);
-          } else if (wrapper.eventId && wrapper.type) {
-            // Ancien format : JSON clair (compatibilité)
-            event = wrapper;
-          }
-
-          // Si onlyNew=false, charger tous les événements (lors de la découverte initiale)
-          // Si onlyNew=true, charger uniquement les nouveaux (polling)
-          if (event && (!onlyNew || !knownEventIds.has(event.eventId))) {
-            events.push(event);
+            // Si onlyNew=false, charger tous les événements (lors de la découverte initiale)
+            // Si onlyNew=true, charger uniquement les nouveaux (polling)
+            if (event && (!onlyNew || !knownEventIds.has(event.eventId))) {
+              events.push(event);
+            }
+          } catch (error) {
+            if (error?.name === 'OperationError' || error?.name === 'DataError') {
+              const marker = sharedProjectKeyHealth.get(normalizedProjectId) || { invalid: false, warnedAt: 0 };
+              marker.invalid = true;
+              const now = Date.now();
+              if ((now - Number(marker.warnedAt || 0)) > 120000) {
+                console.warn('Encrypted events skipped for project (key mismatch). Reattach shared key via passphrase:', normalizedProjectId);
+                marker.warnedAt = now;
+              }
+              sharedProjectKeyHealth.set(normalizedProjectId, marker);
+            } else {
+              console.warn('Unreadable shared event file skipped:', entry.name, error);
+            }
           }
         }
       } catch (error) {
@@ -7143,6 +7483,9 @@
         targetView: payload.targetView || null,
         linkLabel: payload.linkLabel || null,
         actorIcon: payload.actorIcon || null,
+        actionType: payload.actionType || null,
+        actionLabel: payload.actionLabel || null,
+        actionPayload: payload.actionPayload || null,
         timestamp: Date.now(),
         read: false
       };
@@ -7345,9 +7688,10 @@
       }
 
       list.innerHTML = notifications.map(item => `
-        <button onclick="openNotification('${item.id}')" class="w-full text-left rounded-xl border px-3 py-2 ${
+        <div class="w-full text-left rounded-xl border px-3 py-2 ${
           item.read ? 'border-slate-100 bg-white' : 'border-blue-200 bg-blue-50 shadow-sm'
         } hover:bg-slate-50">
+          <button type="button" onclick="openNotification('${item.id}')" class="w-full text-left">
           <div class="flex items-start justify-between gap-2">
             <p class="text-sm ${item.read ? 'font-medium text-slate-700' : 'font-bold text-slate-900'}">${escapeHtml(item.title || 'Information')}</p>
             <span class="text-[10px] text-slate-500">${new Date(item.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -7364,11 +7708,40 @@
                 <span class="material-symbols-outlined text-[13px]">link</span>
                 <span>${escapeHtml(item.linkLabel)}</span>
               </span>
-            ` : ''}
+              ` : ''}
           </div>
-        </button>
+          </button>
+          ${(item.actionType && item.actionLabel) ? `
+            <div class="mt-2">
+              <button
+                type="button"
+                onclick="event.stopPropagation(); handleNotificationAction('${item.id}')"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50"
+              >
+                <span class="material-symbols-outlined text-[14px]">task_alt</span>
+                <span>${escapeHtml(item.actionLabel)}</span>
+              </button>
+            </div>
+          ` : ''}
+        </div>
       `).join('');
     };
+
+    function handleNotificationAction(notificationId) {
+      const notif = notifications.find((n) => String(n?.id || '') === String(notificationId || ''));
+      if (!notif) return;
+      if (notif.actionType === 'mark-legacy-shared-key-treated') {
+        const ids = Array.isArray(notif?.actionPayload?.projectIds) ? notif.actionPayload.projectIds : [];
+        const added = markLegacySharedKeyProjectsAsAudited(ids);
+        notifications = notifications.filter((n) => String(n?.id || '') !== String(notificationId || ''));
+        saveNotifications();
+        renderNotifications();
+        showToast(added > 0
+          ? `${added} projet(s) legacy marque(s) comme traite(s)`
+          : 'Aucun nouveau projet legacy a marquer');
+      }
+    }
+    window.handleNotificationAction = handleNotificationAction;
 
     const addNotificationBase = addNotification;
     addNotification = function addNotificationEnhanced(title, body, projectId = null, meta = {}) {
@@ -8471,6 +8844,9 @@
         const badge = isPrivate
           ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
           : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
+        const localKeyAccessBadge = isProjectAccessViaLocalSharedKey(state)
+          ? '<span class="workspace-chip workspace-chip-private" title="Accès local via clé partagée" aria-label="Accès local via clé partagée"><span class="material-symbols-outlined" style="font-size:12px;line-height:1;">key</span></span>'
+          : '';
         const lastAccessedBadge = project.projectId === lastAccessedProjectId
           ? '<span class="workspace-chip workspace-chip-last-accessed" title="Dernière activité" aria-label="Dernière activité"><span class="material-symbols-outlined" aria-hidden="true">history</span><span>Dernier accès</span></span>'
           : '';
@@ -8500,8 +8876,16 @@
           participantRows.push({ userId: project.createdBy, name: '' });
         }
         const participantsHtml = renderParticipantsStack(participantRows, 3);
-        const projectCreatorIdentity = resolveKnownUserIdentity(project?.createdBy || '', project?.createdBy ? fallbackDirectoryName(project.createdBy) : 'Utilisateur');
-        const projectCreatorName = projectCreatorIdentity?.name || 'Utilisateur';
+        const creatorMemberName = (state?.members || [])
+          .find((member) => String(member?.userId || '').trim() === String(project?.createdBy || '').trim())
+          ?.displayName;
+        const creatorSeedName = String(
+          creatorMemberName
+          || project?.createdByName
+          || (project?.createdBy ? fallbackDirectoryName(project.createdBy) : 'Utilisateur')
+        ).trim();
+        const projectCreatorIdentity = resolveKnownUserIdentity(project?.createdBy || '', creatorSeedName);
+        const projectCreatorName = String(projectCreatorIdentity?.name || creatorSeedName || 'Utilisateur').trim();
         const creatorTooltip = `Projet cree par ${projectCreatorName}`;
 
         return `
@@ -8511,7 +8895,7 @@
                 <span class="material-symbols-outlined text-slate-400">${icon}</span>
                 ${lastAccessedBadge}
               </div>
-              <div class="project-card-badges project-card-badges-meta">${badge}${priorityBadge}${statusBadge}</div>
+              <div class="project-card-badges project-card-badges-meta">${badge}${localKeyAccessBadge}${priorityBadge}${statusBadge}</div>
             </div>
             <div class="project-card-body">
               <h4 class="workspace-card-title text-lg font-bold font-headline mb-3">${project.name}</h4>
@@ -8522,7 +8906,7 @@
                 </div>
                 <div class="flex items-center gap-2">
                   <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
-                  <span class="text-xs font-medium text-slate-600">${isPrivate ? 'Visibilité privée' : 'Visibilité collaborative'}</span>
+                  <span class="text-xs font-medium text-slate-600">${escapeHtml(`Créé par ${projectCreatorName}`)}</span>
                 </div>
               </div>
               <div class="card-hover-actions">
@@ -8847,6 +9231,9 @@
         const badge = isPrivate
           ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
           : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
+        const localKeyAccessBadge = isProjectAccessViaLocalSharedKey(state)
+          ? '<span class="workspace-chip workspace-chip-private" title="Accès local via clé partagée" aria-label="Accès local via clé partagée"><span class="material-symbols-outlined" style="font-size:12px;line-height:1;">key</span></span>'
+          : '';
         const lastAccessedBadge = project.projectId === lastAccessedProjectId
           ? '<span class="workspace-chip workspace-chip-last-accessed" title="Dernière activité" aria-label="Dernière activité"><span class="material-symbols-outlined" aria-hidden="true">history</span><span>Dernier accès</span></span>'
           : '';
@@ -8876,8 +9263,16 @@
           participantRows.push({ userId: project.createdBy, name: '' });
         }
         const participantsHtml = renderParticipantsStack(participantRows, 3);
-        const projectCreatorIdentity = resolveKnownUserIdentity(project?.createdBy || '', project?.createdBy ? fallbackDirectoryName(project.createdBy) : 'Utilisateur');
-        const projectCreatorName = projectCreatorIdentity?.name || 'Utilisateur';
+        const creatorMemberName = (state?.members || [])
+          .find((member) => String(member?.userId || '').trim() === String(project?.createdBy || '').trim())
+          ?.displayName;
+        const creatorSeedName = String(
+          creatorMemberName
+          || project?.createdByName
+          || (project?.createdBy ? fallbackDirectoryName(project.createdBy) : 'Utilisateur')
+        ).trim();
+        const projectCreatorIdentity = resolveKnownUserIdentity(project?.createdBy || '', creatorSeedName);
+        const projectCreatorName = String(projectCreatorIdentity?.name || creatorSeedName || 'Utilisateur').trim();
         const creatorTooltip = `Projet cree par ${projectCreatorName}`;
 
         return `
@@ -8893,7 +9288,7 @@
                   <span class="taskmda-bulk-checkbox-label">Sélection</span>
                 </label>
               ` : ''}
-              <div class="project-card-badges project-card-badges-meta">${badge}${priorityBadge}${statusBadge}</div>
+              <div class="project-card-badges project-card-badges-meta">${badge}${localKeyAccessBadge}${priorityBadge}${statusBadge}</div>
             </div>
             <div class="project-card-body">
               <h4 class="workspace-card-title text-lg font-bold font-headline mb-3">${project.name}</h4>
@@ -8904,7 +9299,7 @@
                 </div>
                 <div class="flex items-center gap-2">
                   <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
-                  <span class="text-xs font-medium text-slate-600">${isPrivate ? 'Visibilité privée' : 'Visibilité collaborative'}</span>
+                  <span class="text-xs font-medium text-slate-600">${escapeHtml(`Créé par ${projectCreatorName}`)}</span>
                 </div>
               </div>
               <div class="card-hover-actions">
@@ -19019,7 +19414,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             EventTypes.ADD_MEMBER,
             projectId,
             currentUser.userId,
-            { userId: currentUser.userId, role: 'owner' }
+            { userId: currentUser.userId, role: 'owner', displayName: String(currentUser?.name || '') }
           );
           await publishEvent(addOwnerEvent);
 
@@ -21285,6 +21680,45 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       });
     }
 
+    async function maybeBackfillProjectCreatorIdentity(state) {
+      const projectId = String(state?.project?.projectId || state?.projectId || '').trim();
+      const creatorId = String(state?.project?.createdBy || '').trim();
+      const currentId = String(currentUser?.userId || '').trim();
+      const currentName = String(currentUser?.name || '').trim();
+      if (!projectId || !creatorId || !currentId || !currentName) return;
+      const aliasIds = getCurrentUserIdAliases(currentId);
+      if (!aliasIds.has(creatorId)) return;
+      if (creatorIdentityBackfillProjects.has(projectId)) return;
+
+      const existingMember = (state?.members || []).find((member) => String(member?.userId || '').trim() === creatorId);
+      const existingName = String(existingMember?.displayName || state?.project?.createdByName || '').trim();
+      if (existingName && normalizeSearch(existingName) === normalizeSearch(currentName)) return;
+
+      creatorIdentityBackfillProjects.add(projectId);
+      try {
+        const backfillEvent = createEvent(
+          EventTypes.ADD_MEMBER,
+          projectId,
+          currentId,
+          {
+            userId: creatorId,
+            role: String(existingMember?.role || 'owner'),
+            displayName: currentName
+          }
+        );
+        await publishEvent(backfillEvent);
+        if (sharedFolderHandle && normalizeSharingMode(state?.project?.sharingMode, 'private') === 'shared') {
+          await syncProjectEventsToSharedSpace(projectId, [backfillEvent], { ensureRegistered: true });
+        }
+        addNotification('Synchronisation', 'Identité créateur synchronisée', projectId, {
+          dedupeKey: `creator-identity-backfill:${projectId}`,
+          targetView: 'project'
+        });
+      } catch (error) {
+        console.warn('Creator identity backfill failed:', error);
+      }
+    }
+
     async function showProjectDetail(projectId, options = {}) {
       const isSameProjectContext = workspaceMode === 'project' && currentProjectId === projectId;
       const shouldResetScroll = options.resetScroll === true
@@ -21319,6 +21753,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         showDashboard();
         return;
       }
+      await maybeBackfillProjectCreatorIdentity(state);
+      const refreshedState = await getProjectState(projectId);
+      const effectiveState = refreshedState?.project ? refreshedState : state;
       rememberLastAccessedProjectId(projectId);
       await refreshKnownUsersCache();
       const notesSearchInput = document.getElementById('project-notes-search');
@@ -21337,10 +21774,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       document.getElementById('project-detail').classList.remove('hidden');
 
       // Update project info
-      document.getElementById('project-title').textContent = state.project.name;
-      renderProjectDescription(state.project.description || '');
-      const projectCreatedLabel = state.project.createdAt ? new Date(state.project.createdAt).toLocaleDateString('fr-FR') : 'Non définie';
-      const projectDeadlineLabel = formatProjectDeadline(state.project);
+      document.getElementById('project-title').textContent = effectiveState.project.name;
+      renderProjectDescription(effectiveState.project.description || '');
+      const projectCreatedLabel = effectiveState.project.createdAt ? new Date(effectiveState.project.createdAt).toLocaleDateString('fr-FR') : 'Non définie';
+      const projectDeadlineLabel = formatProjectDeadline(effectiveState.project);
       const projectDateMeta = projectDeadlineLabel !== 'Non définie'
         ? `${projectCreatedLabel} • Échéance: ${projectDeadlineLabel}`
         : projectCreatedLabel;
@@ -21348,25 +21785,35 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const projectMembersCountEl = document.getElementById('project-members-count');
       const projectMembersIconEl = document.getElementById('project-members-icon');
       if (projectMembersCountEl) {
-        projectMembersCountEl.innerHTML = renderProjectMembersSummary(state, 3);
+        const creatorIdentity = resolveKnownUserIdentity(
+          String(effectiveState.project?.createdBy || ''),
+          String(effectiveState.project?.createdByName || fallbackDirectoryName(effectiveState.project?.createdBy || ''))
+        );
+        const creatorName = String(
+          creatorIdentity?.name
+          || effectiveState.project?.createdByName
+          || fallbackDirectoryName(effectiveState.project?.createdBy || '')
+          || 'Utilisateur'
+        ).trim();
+        projectMembersCountEl.innerHTML = `${renderProjectMembersSummary(effectiveState, 3)}<span class="text-xs font-medium text-slate-600 ml-2">Créé par ${escapeHtml(creatorName)}</span>`;
       }
       if (projectMembersIconEl) {
-        const memberIds = new Set((state?.members || [])
+        const memberIds = new Set((effectiveState?.members || [])
           .map((member) => String(member?.userId || '').trim())
           .filter(Boolean));
-        const hasCreatedByFallback = !memberIds.size && String(state?.project?.createdBy || '').trim();
+        const hasCreatedByFallback = !memberIds.size && String(effectiveState?.project?.createdBy || '').trim();
         const displayedMembersCount = memberIds.size + (hasCreatedByFallback ? 1 : 0);
         projectMembersIconEl.classList.toggle('hidden', displayedMembersCount > 0);
       }
       const projectOverviewBadgesEl = document.getElementById('project-overview-badges');
       if (projectOverviewBadgesEl) {
-        const isPrivate = String(state.project.sharingMode || '') === 'private';
+        const isPrivate = String(effectiveState.project.sharingMode || '') === 'private';
         const sharingBadge = isPrivate
           ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
           : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
-        const priority = normalizeProjectPriority(state.project.priority);
+        const priority = normalizeProjectPriority(effectiveState.project.priority);
         const priorityBadge = `<span class="workspace-chip ${getProjectPriorityChipClass(priority)}">${getProjectPriorityLabel(priority)}</span>`;
-        const status = String(state.project.status || 'en-cours');
+        const status = String(effectiveState.project.status || 'en-cours');
         const statusBadge = status === 'urgent'
           ? '<span class="workspace-chip workspace-chip-status-urgent">Urgent</span>'
           : status === 'termine'
@@ -21376,30 +21823,30 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               : '<span class="workspace-chip workspace-chip-status-active">En cours</span>';
         projectOverviewBadgesEl.innerHTML = `${sharingBadge}${priorityBadge}${statusBadge}`;
       }
-      const visibleTasks = (state.tasks || []).filter(t => !t.archivedAt);
+      const visibleTasks = (effectiveState.tasks || []).filter(t => !t.archivedAt);
       document.getElementById('project-kpi-tasks').textContent = String(visibleTasks.length);
       document.getElementById('project-kpi-done').textContent = String(visibleTasks.filter(t => t.status === 'termine').length);
-      document.getElementById('project-kpi-messages').textContent = String((state.messages || []).length);
-      await renderProjectRgpdImpactCard(state.project);
+      document.getElementById('project-kpi-messages').textContent = String((effectiveState.messages || []).length);
+      await renderProjectRgpdImpactCard(effectiveState.project);
       bindProjectKpiActions();
       await renderProjectSequentialNav(projectId);
-      await renderProjectMembers(state);
-      await renderProjectUserGroups(state);
-      renderProjectPermissionMatrix(state);
-      renderProjectInvitations(state);
-      await renderProjectGroups(state);
-      renderProjectThemes(state);
-      renderProjectHierarchy(state);
-      await syncProjectTaxonomyToGlobal(state);
-      refreshTaskMetadataOptions(state);
-      syncProjectThemeFilterAssist(state);
-      refreshProjectHierarchyTaskFilters(state);
-      refreshProjectDocumentTaskOptions(state);
-      await refreshTaskAssigneeOptionsMulti(state);
+      await renderProjectMembers(effectiveState);
+      await renderProjectUserGroups(effectiveState);
+      renderProjectPermissionMatrix(effectiveState);
+      renderProjectInvitations(effectiveState);
+      await renderProjectGroups(effectiveState);
+      renderProjectThemes(effectiveState);
+      renderProjectHierarchy(effectiveState);
+      await syncProjectTaxonomyToGlobal(effectiveState);
+      refreshTaskMetadataOptions(effectiveState);
+      syncProjectThemeFilterAssist(effectiveState);
+      refreshProjectHierarchyTaskFilters(effectiveState);
+      refreshProjectDocumentTaskOptions(effectiveState);
+      await refreshTaskAssigneeOptionsMulti(effectiveState);
       const btnEditProject = document.getElementById('btn-edit-project');
       const btnMarkProjectDone = document.getElementById('btn-mark-project-done');
       const btnDeleteProject = document.getElementById('btn-delete-project');
-      const canEditProjectOverviewInline = canEditProjectMeta(state);
+      const canEditProjectOverviewInline = canEditProjectMeta(effectiveState);
       if (btnEditProject) {
         const allowed = canEditProjectOverviewInline;
         btnEditProject.disabled = !allowed;
@@ -21407,13 +21854,13 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         btnEditProject.title = allowed ? '' : 'Réservé aux Propriétaires/Managers';
       }
       if (btnDeleteProject) {
-        const allowed = canDeleteProjectMeta(state);
+        const allowed = canDeleteProjectMeta(effectiveState);
         btnDeleteProject.disabled = !allowed;
         btnDeleteProject.classList.toggle('opacity-50', !allowed);
         btnDeleteProject.title = allowed ? '' : 'Réservé au Propriétaire';
       }
       if (btnMarkProjectDone) {
-        const isDone = String(state.project?.status || '') === 'termine';
+        const isDone = String(effectiveState.project?.status || '') === 'termine';
         btnMarkProjectDone.classList.toggle('hidden', isDone);
         if (!isDone) {
           const allowed = canEditProjectOverviewInline;
@@ -21582,7 +22029,11 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const editSharingMode = normalizeSharingMode(state.project.sharingMode, 'private');
       updateProjectEditSharingUi(editSharingMode);
       const editPassphraseInput = document.getElementById('edit-project-passphrase');
-      if (editPassphraseInput) editPassphraseInput.value = '';
+      if (editPassphraseInput) {
+        editPassphraseInput.value = editSharingMode === 'shared'
+          ? String(state.project?.joinPassphrase || '')
+          : '';
+      }
       await populateProjectGroupPresetOptions('edit-project-group-presets', (state.groups || []).map(g => g.name));
       document.getElementById('modal-edit-project').classList.remove('hidden');
       document.getElementById('edit-project-name').focus();
@@ -21646,6 +22097,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (nextSharingMode === 'shared') {
         let sharedKeyData = await getDecrypted('sharedKeys', currentProjectId, 'projectId');
         if (!sharedKeyData?.sharedKey) {
+          if (!modePassphrase) {
+            showToast('Une passphrase est requise pour activer le mode partage');
+            return;
+          }
           const sharedKey = modePassphrase
             ? await window.TaskMDACrypto.deriveSharedKeyFromPassphrase(modePassphrase, currentProjectId)
             : await window.TaskMDACrypto.generateSharedKey();
@@ -34883,6 +35338,63 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       console.error('TaskMDAAppInit module not available');
     }
 
+    function openAttachSharedProjectModal() {
+      document.getElementById('attach-shared-project-id').value = '';
+      document.getElementById('attach-shared-project-passphrase').value = '';
+      const errorEl = document.getElementById('attach-shared-project-error');
+      if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+      }
+      document.getElementById('modal-attach-shared-project')?.classList.remove('hidden');
+      setTimeout(() => document.getElementById('attach-shared-project-id')?.focus(), 50);
+    }
+
+    function closeAttachSharedProjectModal() {
+      document.getElementById('modal-attach-shared-project')?.classList.add('hidden');
+    }
+
+    async function confirmAttachSharedProjectFromModal() {
+      const projectId = String(document.getElementById('attach-shared-project-id')?.value || '').trim();
+      const passphrase = String(document.getElementById('attach-shared-project-passphrase')?.value || '').trim();
+      const errorEl = document.getElementById('attach-shared-project-error');
+      const setAttachError = (message) => {
+        if (!errorEl) return;
+        errorEl.textContent = String(message || '').trim();
+        errorEl.classList.remove('hidden');
+      };
+      if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+      }
+      if (!projectId) {
+        setAttachError('Project ID requis.');
+        document.getElementById('attach-shared-project-id')?.focus();
+        return;
+      }
+      if (!passphrase) {
+        setAttachError('Passphrase requise.');
+        document.getElementById('attach-shared-project-passphrase')?.focus();
+        return;
+      }
+      try {
+        showLoading(true);
+        await attachSharedProjectKeyFromPassphrase(projectId, passphrase, { silent: false });
+        closeAttachSharedProjectModal();
+      } catch (error) {
+        console.error('Shared project attach failed:', error);
+        const rawMessage = String(error?.message || '').trim();
+        if (rawMessage.toLowerCase().includes('passphrase invalide')) {
+          setAttachError(`Passphrase incorrecte pour ce projectId (${projectId}).`);
+        } else {
+          setAttachError(rawMessage || 'Echec du rattachement du projet partage.');
+        }
+      } finally {
+        showLoading(false);
+      }
+    }
+    window.openAttachSharedProjectModal = openAttachSharedProjectModal;
+
     async function deleteIndexedDbByName(dbName) {
       return await new Promise((resolve, reject) => {
         try {
@@ -35045,6 +35557,16 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     document.getElementById('btn-global-manage-themes')?.addEventListener('click', showGlobalThemeManagementModal);
     document.getElementById('btn-link-folder')?.addEventListener('click', handleSelectFolder);
     document.getElementById('btn-unlink-folder')?.addEventListener('click', handleContinueWithoutFolder);
+    document.getElementById('btn-open-attach-shared-project-modal')?.addEventListener('click', openAttachSharedProjectModal);
+    document.getElementById('btn-close-attach-shared-project-modal')?.addEventListener('click', closeAttachSharedProjectModal);
+    document.getElementById('btn-cancel-attach-shared-project-modal')?.addEventListener('click', closeAttachSharedProjectModal);
+    document.getElementById('btn-attach-shared-project-confirm')?.addEventListener('click', confirmAttachSharedProjectFromModal);
+    document.getElementById('attach-shared-project-passphrase')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmAttachSharedProjectFromModal();
+      }
+    });
     document.getElementById('sidebar-link-folder')?.addEventListener('click', handleSelectFolder);
     document.getElementById('btn-user-logout')?.addEventListener('click', handleLogout);
     document.getElementById('sidebar-logout')?.addEventListener('click', handleLogout);
@@ -36280,13 +36802,14 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
         // Générer/dériver la clé partagée si projet partagé
         if (sharingMode === 'shared') {
-          if (passphrase) {
-            // Dériver depuis passphrase
-            sharedKey = await window.TaskMDACrypto.deriveSharedKeyFromPassphrase(passphrase, projectId);
-          } else {
-            // Générer aléatoirement
-            sharedKey = await window.TaskMDACrypto.generateSharedKey();
+          if (!passphrase) {
+            showToast('❌ Une passphrase est requise pour un projet partagé');
+            document.getElementById('project-passphrase')?.focus();
+            showLoading(false);
+            return;
           }
+          // Dériver depuis passphrase
+          sharedKey = await window.TaskMDACrypto.deriveSharedKeyFromPassphrase(passphrase, projectId);
 
           sharedKeyHex = await window.TaskMDACrypto.exportSharedKey(sharedKey);
 
@@ -36297,6 +36820,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             passphrase: passphrase || null,
             createdAt: Date.now()
           }, 'projectId');
+          localSharedKeyProjectIds.add(projectId);
 
           debugLog('Shared key generated for project:', projectId);
         }
@@ -36308,6 +36832,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           currentUser.userId,
           {
             name: name,
+            createdByName: String(currentUser?.name || ''),
             description: getProjectDescriptionHtmlForStorage('project-description-editor', 'project-description-input'),
             status: document.getElementById('project-status').value,
             priority: normalizeProjectPriority(document.getElementById('project-priority')?.value || 'normale'),
@@ -36331,7 +36856,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           EventTypes.ADD_MEMBER,
           projectId,
           currentUser.userId,
-          { userId: currentUser.userId, role: 'owner' }
+          { userId: currentUser.userId, role: 'owner', displayName: String(currentUser?.name || '') }
         );
 
         await publishEvent(addMemberEvent);
@@ -36380,7 +36905,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           await publishEvent(event);
         }
 
-        // Synchronisation espace collectif: en arrière-plan, sans bloquer la création locale.
+        // Synchronisation espace collectif: attendre le bootstrap pour garantir la copie initiale.
         if (sharingMode === 'shared') {
           const bootstrapEvents = [
             createProjectEvent,
@@ -36389,7 +36914,12 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             ...addThemeEvents,
             ...createProjectDocumentEvents
           ];
-          void syncProjectBootstrapToSharedSpace(projectId, sharedKeyHex, bootstrapEvents);
+          const bootstrapResult = await syncProjectBootstrapToSharedSpace(projectId, sharedKeyHex, bootstrapEvents);
+          if (Number(bootstrapResult?.failed || 0) > 0) {
+            showToast(`Projet cree, mais synchronisation collaborative incomplete (${bootstrapResult.failed}/${bootstrapResult.total})`);
+          } else {
+            showToast('Projet collaboratif copie dans l espace partage');
+          }
         }
 
         await refreshStats();
@@ -36402,7 +36932,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       refreshLinkedPendingSummaries();
         updateCreateProjectDocFilesSummary();
       const modeText = sharingMode === 'private' ? 'privé' : 'partagé et chiffré E2E';
-      showToast(`✅ Projet ${modeText} créé !`);
+      if (sharingMode !== 'shared') {
+        showToast(`✅ Projet ${modeText} créé !`);
+      }
       addNotification('Projet', `Projet ${name} créé (${sharingMode})`, projectId);
 
         // Ouvrir automatiquement le projet créé
