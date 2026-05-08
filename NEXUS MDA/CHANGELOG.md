@@ -33,6 +33,8 @@
   - retro-correction auto identite createur: quand le createur ouvre un projet et que son nom manque, l application publie un `ADD_MEMBER` de backfill avec `displayName` (sync partagee), et `ADD_MEMBER` devient upsert (mise a jour du nom si le membre existe deja).
   - UX discrete: micro-notification `Identite createur synchronisee` (dedupee par projet) lors du premier backfill reussi.
   - robustesse identite createur legacy: backfill autorise via alias d utilisateur (pas seulement userId strict), et mise a jour de `project.createdByName` lors de la reception d un `ADD_MEMBER` correspondant au createur.
+  - invitation collaborative par email: ajout d un bouton `Preparer email de rattachement (BCC auto)` dans la section Invitations, avec destinataires cibles auto en BCC et option explicite `Inclure la passphrase` (desactivee par defaut recommandee).
+  - mailto etendu: support des champs `cc` et `bcc` dans le helper `openMailto`.
 
 ## Mise a jour incrementale - Mai 2026 (Dependances frontend localisees)
 

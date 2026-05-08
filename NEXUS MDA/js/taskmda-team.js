@@ -19962,14 +19962,75 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         .replace(/\u2026/g, '...');
     }
 
-    function openMailto({ to = [], subject = '', body = '' }) {
-      const toValue = Array.isArray(to) ? to.join(',') : String(to || '');
+    function openMailto({ to = [], cc = [], bcc = [], subject = '', body = '' }) {
+      const normalizeCsv = (value) => (Array.isArray(value) ? value.join(',') : String(value || ''));
+      const toValue = normalizeCsv(to);
+      const ccValue = normalizeCsv(cc);
+      const bccValue = normalizeCsv(bcc);
       // Outlook/clients Windows can misread UTF-8 percent-encoding in mailto.
       // We normalize to ASCII-safe text to avoid mojibake in generated drafts.
       const safeSubject = normalizeMailText(subject);
       const safeBody = normalizeMailText(body);
-      const mailto = `mailto:${encodeURIComponent(toValue)}?subject=${encodeURIComponent(safeSubject)}&body=${encodeURIComponent(safeBody)}`;
+      const queryParts = [];
+      if (ccValue) queryParts.push(`cc=${encodeURIComponent(ccValue)}`);
+      if (bccValue) queryParts.push(`bcc=${encodeURIComponent(bccValue)}`);
+      queryParts.push(`subject=${encodeURIComponent(safeSubject)}`);
+      queryParts.push(`body=${encodeURIComponent(safeBody)}`);
+      const mailto = `mailto:${encodeURIComponent(toValue)}?${queryParts.join('&')}`;
       window.location.href = mailto;
+    }
+
+    async function sendCollaborativeAttachEmail() {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      if (!state?.project) {
+        showToast('Projet introuvable');
+        return;
+      }
+      if (normalizeSharingMode(state.project.sharingMode, 'private') !== 'shared') {
+        showToast('Ce projet n est pas en mode collaboratif');
+        return;
+      }
+      const recipients = await collectProjectRecipientEmails(state, { includeProjectAssignees: false });
+      if (!recipients.length) {
+        showToast('Aucun destinataire email trouve');
+        return;
+      }
+      const includePassphrase = !!document.getElementById('project-attach-email-include-passphrase')?.checked;
+      const sharedKeyData = await getDecrypted('sharedKeys', currentProjectId, 'projectId');
+      const passphrase = String(sharedKeyData?.passphrase || state.project?.joinPassphrase || '').trim();
+      const creatorIdentity = resolveKnownUserIdentity(
+        String(state.project?.createdBy || ''),
+        String(state.project?.createdByName || fallbackDirectoryName(state.project?.createdBy || ''))
+      );
+      const creatorName = String(creatorIdentity?.name || state.project?.createdByName || fallbackDirectoryName(state.project?.createdBy || '') || 'Utilisateur').trim();
+      const subject = `[NEXUS MDA] Rattachement projet collaboratif: ${state.project?.name || currentProjectId}`;
+      const bodyLines = [
+        'Bonjour,',
+        '',
+        `Vous pouvez rattacher le projet collaboratif "${state.project?.name || 'Projet'}".`,
+        '',
+        `ProjectId: ${currentProjectId}`,
+        `Créé par: ${creatorName}`,
+        '',
+        'Action dans l application:',
+        '- Ouvrir Referentiels > Identite',
+        '- Cliquer "Rattacher un projet partage"',
+        '- Saisir projectId + passphrase',
+        ''
+      ];
+      if (includePassphrase) {
+        if (!passphrase) {
+          showToast('Passphrase indisponible localement pour ce projet');
+          return;
+        }
+        bodyLines.push(`Passphrase: ${passphrase}`, '');
+      } else {
+        bodyLines.push('Passphrase: envoyee via canal separe (recommande).', '');
+      }
+      bodyLines.push('Cordialement,', String(currentUser?.name || 'Equipe projet'));
+      openMailto({ to: '', bcc: recipients, subject, body: bodyLines.join('\n') });
+      showToast(`Email prepare (${recipients.length} destinataire(s) en BCC)`);
     }
 
     async function sendInvitationEmail(inviteId) {
@@ -35791,6 +35852,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }
     });
     document.getElementById('btn-send-invite')?.addEventListener('click', addProjectInvite);
+    document.getElementById('btn-email-shared-attach')?.addEventListener('click', () => {
+      void sendCollaborativeAttachEmail();
+    });
     document.getElementById('btn-create-user-group')?.addEventListener('click', createUserGroup);
     document.getElementById('btn-update-user-group')?.addEventListener('click', updateUserGroupSelection);
     document.getElementById('user-group-name-input')?.addEventListener('keydown', async (e) => {
