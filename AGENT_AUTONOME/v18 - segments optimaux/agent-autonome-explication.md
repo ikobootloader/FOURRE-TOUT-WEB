@@ -1,4 +1,4 @@
-# Explication détaillée de l'Agent Autonome
+# Propagation Dynamique de Valeur pour Agent Autonome
 
 ## Vue d'ensemble
 
